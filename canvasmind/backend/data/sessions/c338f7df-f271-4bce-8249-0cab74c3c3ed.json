@@ -1,0 +1,35 @@
+{
+  "session_id": "c338f7df-f271-4bce-8249-0cab74c3c3ed",
+  "title": "Session: Create a surreal cyberpunk forest at dus...",
+  "user_prompt": "Create a surreal cyberpunk forest at dusk",
+  "status": "completed",
+  "current_round": 10,
+  "max_rounds": 10,
+  "messages": [],
+  "critic_evaluations": [],
+  "canvas_state": {
+    "canvas_id": "fb3962fa-9fe9-4a99-8954-fc4e80967a66",
+    "width": 1024,
+    "height": 1024,
+    "current_round": 0,
+    "operations_history": [],
+    "snapshots": [],
+    "region_ownership": {},
+    "contested_regions": [],
+    "current_image_base64": null,
+    "last_updated": "2026-05-26T19:15:37.762196"
+  },
+  "agent_a_status": "typing",
+  "agent_b_status": "waiting",
+  "agent_a_memory": [],
+  "agent_b_memory": [],
+  "convergence_score": 0.0,
+  "user_interventions": [],
+  "finalized_plan": null,
+  "created_at": "2026-05-26T19:15:37.762196",
+  "updated_at": "2026-05-26T19:15:41.978570",
+  "metadata": {
+    "style_hint": "",
+    "era_hint": ""
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "session_id": "8aad77d7-e295-488e-9bbc-b85724c6536d",
+  "title": "Session: Paint a cat in Da Vinci style...",
+  "user_prompt": "Paint a cat in Da Vinci style",
+  "status": "completed",
+  "current_round": 10,
+  "max_rounds": 10,
+  "messages": [],
+  "critic_evaluations": [],
+  "canvas_state": {
+    "canvas_id": "c6d86ad5-f730-4825-a76f-461817128ca4",
+    "width": 1024,
+    "height": 1024,
+    "current_round": 0,
+    "operations_history": [],
+    "snapshots": [],
+    "region_ownership": {},
+    "contested_regions": [],
+    "current_image_base64": null,
+    "last_updated": "2026-05-26T19:14:10.011236"
+  },
+  "agent_a_status": "typing",
+  "agent_b_status": "waiting",
+  "agent_a_memory": [],
+  "agent_b_memory": [],
+  "convergence_score": 0.0,
+  "user_interventions": [],
+  "finalized_plan": null,
+  "created_at": "2026-05-26T19:14:10.011236",
+  "updated_at": "2026-05-26T19:14:16.157828",
+  "metadata": {
+    "style_hint": "",
+    "era_hint": ""
+  }
+}
