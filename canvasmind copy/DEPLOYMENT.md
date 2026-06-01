@@ -21,6 +21,8 @@
 14. [Run as Permanent Background Services](#14-run-as-permanent-background-services)
 15. [Troubleshooting Every Possible Error](#15-troubleshooting-every-possible-error)
 16. [Quick Command Reference](#16-quick-command-reference)
+17. [Backend-Only Agent Simulation (No Frontend Needed)](#17-backend-only-agent-simulation-no-frontend-needed)
+18. [Running the Frontend Behind a Reverse Proxy (Sub-Path URL)](#18-running-the-frontend-behind-a-reverse-proxy-sub-path-url)
 
 ---
 
@@ -77,12 +79,20 @@ This section explains **every single file** in the project so you can explain it
 canvasmind/
 ├── backend/          Python FastAPI server — all AI logic lives here
 ├── frontend/         React + TypeScript app — the UI
+├── README.md         Quick-start overview
 ├── DEPLOYMENT.md     This file
 ```
 
 ---
 
 ### Backend Files
+
+#### `backend/simulate_chat.py`
+A standalone, backend-only script that runs the **entire** ARIA → NEXUS → JUDGE
+conversation in the terminal — no frontend, no proxy, no ports. It reuses the
+real agent and provider classes, so the dialogue is identical to the full app.
+This is the most reliable way to demo CanvasMind on a remote VM. See
+[Section 17](#17-backend-only-agent-simulation-no-frontend-needed) for full usage.
 
 #### `backend/main.py`
 The application entry point. Does four things in order:
@@ -1345,6 +1355,189 @@ Run through this list in order. Every item must be checked.
 
 ---
 
-*CanvasMind — IIIT Hyderabad Computational Creativity Research Platform*
+## 17. Backend-Only Agent Simulation (No Frontend Needed)
+
+This is the **most reliable way to demo CanvasMind on a remote VM**. It runs the
+entire three-agent conversation (ARIA → NEXUS → JUDGE) directly in the terminal
+with their real personalities. There is **no frontend, no proxy, no ports, no
+WebSocket, no CORS** — so none of the browser/proxy issues can ever affect it.
+It only needs Azure credentials in `backend/.env` and internet access.
+
+Use this when:
+- You want to show your manager the agents actually talking and converging.
+- The frontend is blocked by a corporate reverse proxy (see Section 18).
+- You want to confirm your Azure credentials and deployments work end-to-end.
+
+### The file: `backend/simulate_chat.py`
+
+It reuses the **real production classes** — `AzureOpenAIProvider`,
+`CreativeDirector` (ARIA), `CreativeChallenger` (NEXUS), `CriticAgent` (JUDGE) —
+so the dialogue is identical to what the full app produces. Nothing is mocked.
+
+What it does each round:
+1. **ARIA** (Creative Director) proposes a concrete artistic direction.
+2. **NEXUS** (Creative Challenger) challenges a weakness or proposes a richer alternative.
+3. **JUDGE** (Critic) scores the round on all 5 dimensions, lists contradictions
+   and weak ideas, and gives a specific directive to each agent.
+4. Convergence is checked (composite ≥ 7.5 **and** the critic's convergence signal).
+   When reached, the session ends and prints a summary with the full score trend.
+
+### How to run it on the VM
+
+```bash
+cd ~/canvasmind/backend
+source venv/bin/activate
+
+# Make sure backend/.env has your REAL Azure credentials (see Section 8).
+
+# Default run (5 rounds, a built-in cyberpunk prompt):
+python simulate_chat.py
+
+# Custom creative brief and round count:
+python simulate_chat.py --prompt "A serene mountain lake at golden hour" --rounds 5
+
+# With an optional style hint:
+python simulate_chat.py --prompt "A cathedral interior" --rounds 6 --style "baroque chiaroscuro"
+```
+
+### Command-line options
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--prompt` | a cyberpunk forest brief | The creative brief the agents collaborate on |
+| `--rounds` | `5` | Maximum negotiation rounds (clamped to 1–20) |
+| `--style` | empty | Optional style hint (e.g. `impressionist`, `neon noir`) |
+
+### What you will see
+
+```
+══════════════════════════════════════════════════════════════
+  CanvasMind — Multi-Agent Creative AI Painting System
+  Azure Endpoint  : https://your-resource.openai.azure.com/
+  API Key         : ****ab12
+  ...
+══════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ROUND 1 / 5
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ARIA is composing ....
+┌─ ARIA (Creative Director)   intent=propose · confidence=85%
+│ Artistic goal: ...
+│ Palette: #1a2b3c  #d4af37 ...
+│ Composition: ...
+│ Next action → ...
+└────────────────────────────────────────────────────────────
+
+  NEXUS is examining ....
+┌─ NEXUS (Creative Challenger)   intent=challenge · confidence=78%
+│ Critique: ...
+│ Next action → ...
+└────────────────────────────────────────────────────────────
+
+╔═ JUDGE (Critic Agent) — Round 1
+║  Compositional Coherence  ███████░░░ 7.0
+║  Style Fidelity           ████████░░ 8.0
+║  ...
+║  COMPOSITE                ███████░░░ 7.4
+║  → Directive for ARIA: ...
+║  → Directive for NEXUS: ...
+╚════════════════════════════════════════════════════════════
+```
+
+### Troubleshooting the simulation
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `[CanvasMind] FATAL: Missing required environment variables` | `.env` not filled in | Add all 5 Azure values to `backend/.env` (Section 8) |
+| `Error code: 401 ... invalid subscription key` | Wrong API key or endpoint | Re-copy `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` from the Azure Portal |
+| `Error code: 404` | Wrong deployment name | Check `AZURE_OPENAI_DEPLOYMENT_GPTTEXT52` matches your Azure AI Studio deployment exactly |
+| `UnicodeEncodeError` on Windows | cp1252 console | The script forces UTF-8 automatically; if you copied an older version, re-pull this file |
+| Agents fail but no crash | Network/Azure issue | Each agent failure is caught and reported per-round; check VM outbound HTTPS |
+
+---
+
+## 18. Running the Frontend Behind a Reverse Proxy (Sub-Path URL)
+
+Many corporate / cloud dev environments expose the VM through a reverse proxy at
+a **sub-path**, for example:
+
+```
+https://rniazure.tcsapps.com/dev-workspaces/RAMA-GPU-A100/proxy/3000/
+```
+
+### The problem
+
+By default, Vite writes asset links as **absolute paths from the domain root**
+(`/src/main.tsx`, `/@vite/client`, `/@react-refresh`). Behind a sub-path proxy
+the browser then requests `https://host/src/main.tsx` — which **drops the
+`/dev-workspaces/.../proxy/3000/` prefix** — and the proxy returns **404**. The
+page loads blank with console errors like:
+
+```
+Failed to load resource: 404  main.tsx
+Failed to load resource: 404  @react-refresh
+Failed to load resource: 404  client
+```
+
+(The `copy-paste-disable.js` 404 is injected by the proxy itself, not by us — ignore it.)
+
+### The fix (already applied in `vite.config.ts`)
+
+The config now uses **relative asset paths** for production builds
+(`base: './'`), which preserve the proxy prefix automatically. Two ways to run:
+
+**Option A — Production build + preview (recommended, most reliable):**
+
+```bash
+cd ~/canvasmind/frontend
+npm run build
+npm run preview -- --host 0.0.0.0 --port 3000
+```
+
+Because the build uses `base: './'`, every asset is requested relative to the
+current page, so the proxy prefix is preserved and there are no 404s. There is
+also no HMR WebSocket to misbehave behind the proxy.
+
+**Option B — Live dev server behind the proxy:**
+
+Pass the exact proxy prefix so Vite prepends it to every asset URL:
+
+```bash
+cd ~/canvasmind/frontend
+VITE_BASE=/dev-workspaces/RAMA-GPU-A100/proxy/3000/ \
+  npm run dev -- --host 0.0.0.0 --port 3000
+```
+
+Replace `RAMA-GPU-A100` with your actual workspace name from the URL. If
+hot-reload doesn't connect through the proxy, the page still loads fully — just
+refresh the browser manually after code changes.
+
+### Important: the backend must also be reachable
+
+When the frontend runs in your browser via the proxy, `localhost:8000` refers to
+**your laptop**, not the VM. For the full UI to talk to the backend you must
+either:
+- expose the backend through the **same proxy** at `.../proxy/8000/` and set
+  `VITE_BACKEND_URL` / `VITE_WS_URL` in `frontend/.env` to that proxied URL, **or**
+- access the VM by its **public IP** with ports 8000 and 3000 open (Section 12).
+
+If the proxy makes full end-to-end frontend wiring difficult, use the
+**backend-only simulation (Section 17)** for your demo — it sidesteps all of this.
+
+### Proxy fix summary table
+
+| Layer | Symptom | Fix |
+|---|---|---|
+| Frontend assets | Blank page, 404 on `main.tsx`/`client` | Build with `base: './'` (done) → use `npm run build` + `npm run preview` |
+| Dev server | 404s with `npm run dev` | Set `VITE_BASE=/dev-workspaces/<name>/proxy/3000/` |
+| HMR WebSocket | Hot reload won't connect | Harmless — refresh manually; config already sets `wss`/`clientPort 443` when `VITE_BASE` is set |
+| Backend API | UI loads but calls fail | Proxy port 8000 too, or use public IP; set `VITE_BACKEND_URL`/`VITE_WS_URL` |
+| Anything proxy-related | Too complex to wire | Use the backend-only simulation (Section 17) |
+
+---
+
+*CanvasMind — TCS Research Computational Creativity Platform*
 *Backend: Python 3.11 / FastAPI 0.111 / Pydantic 2.7 / Azure OpenAI SDK 1.35*
 *Frontend: React 18.3 / TypeScript 5.4 / Vite 5.3 / Zustand 4.5 / Framer Motion 11*
