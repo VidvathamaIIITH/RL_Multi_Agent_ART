@@ -13,7 +13,8 @@ import path from 'path'
 //     VITE_BASE=/dev-workspaces/RAMA-GPU-A100/proxy/3000/ npm run dev
 // Locally (no proxy) the default '/' is used and everything just works.
 export default defineConfig(({ command }) => {
-  const base = process.env.VITE_BASE || (command === 'build' ? './' : '/')
+  // Always use relative asset paths so the build works behind a sub-path proxy.
+  const base = './'
 
   return {
     base,
@@ -28,9 +29,14 @@ export default defineConfig(({ command }) => {
       port: 3000,
       strictPort: true,
       open: false,
-      // Let HMR work through an HTTPS reverse proxy when VITE_BASE is set.
-      // The browser reaches the proxy on 443/wss; if HMR can't connect the
-      // page still loads fully (you just refresh manually after edits).
+
+      // REQUIRED behind the TCS reverse proxy: Vite blocks requests whose Host
+      // header is not in this list (you would otherwise get a "host not
+      // allowed" / blank page). Add every proxy hostname you serve through.
+      allowedHosts: ['rniazure.tcsapps.com'],
+
+      // HMR through an HTTPS reverse proxy when VITE_BASE is set; if it can't
+      // connect the page still loads fully (just refresh after edits).
       hmr: process.env.VITE_BASE
         ? { clientPort: 443, protocol: 'wss' }
         : true,
