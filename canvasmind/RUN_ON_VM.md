@@ -1,86 +1,100 @@
 # CanvasMind — Run Everything on the Azure VM (End-to-End)
 
 This guide gets CanvasMind running **perfectly on the VM with zero mistakes**.
-There are two ways to run it — pick one:
+The whole product is now **2 Python files + 1 launcher**:
 
-| Option | File | What you get | Best for |
-|---|---|---|---|
-| **A. Single-file web app** ⭐ | `canvasmind_app.py` | Full browser UI: agents talking live, canvas images, critic gauges — all on **one port** | The visual demo on the VM (no proxy 404s) |
-| **B. Terminal simulation** | `simulate_chat.py` | The full conversation printed in the terminal (no browser at all) | Quickest proof it works / SSH-only |
+| File | What it is |
+|---|---|
+| **`launch.sh`** / `launch.ps1` | One-command launcher (sets up deps, starts the app) — **run this** |
+| **`canvasmind_app.py`** ⭐ | The complete app: web UI + backend + 3-image co-creation, on **one port** |
+| **`simulate_chat.py`** | Terminal-only demo (no browser) — agents printed to the console |
 
-Both call Azure **exactly the same proven way**: raw REST with
+Both Python files call Azure **exactly the proven way**: raw REST with
 `max_completion_tokens` (gpt-5.2 rejects `max_tokens`) and no custom temperature.
-This is why they work where the old SDK-based app failed.
+This is why they work where the old SDK-based app failed. **You do not need to
+build or run the React frontend** — the single-file app *is* the frontend and
+backend together.
 
-> **The whole product is now just 2 Python files** — `canvasmind_app.py`
-> (frontend + backend + images combined) and `simulate_chat.py` (terminal demo).
-> You do **not** need to build or run the React frontend at all. (The React app
-> is still here for reference — see the optional section at the end.)
+> ✅ **Verified end-to-end.** The full pipeline was tested through the real HTTP
+> server + SSE: `session → ARIA(partial image) → NEXUS(builds on it) →
+> JUDGE(combines both) → 3 downloadable images → done`. Only the live Azure call
+> needs your VM credentials.
 
 ---
 
 ## Table of Contents
 
-1. [Why the single-file app fixes the VM problems](#1-why-the-single-file-app-fixes-the-vm-problems)
-2. [One-time VM setup](#2-one-time-vm-setup)
-3. [Set your Azure credentials](#3-set-your-azure-credentials)
-4. [Option A — Run the single-file web app](#4-option-a--run-the-single-file-web-app)
-5. [Open it in the browser (through the proxy)](#5-open-it-in-the-browser-through-the-proxy)
-6. [Option B — Run the terminal simulation](#6-option-b--run-the-terminal-simulation)
-7. [Keep it running after you log out](#7-keep-it-running-after-you-log-out)
-8. [Troubleshooting every error](#8-troubleshooting-every-error)
-9. [Optional — the original React frontend](#9-optional--the-original-react-frontend)
-10. [Quick command reference](#10-quick-command-reference)
+1. [What the app does (the 3-image co-creation)](#1-what-the-app-does-the-3-image-co-creation)
+2. [Why this fixes the VM proxy problems](#2-why-this-fixes-the-vm-proxy-problems)
+3. [One-time VM setup](#3-one-time-vm-setup)
+4. [Set your Azure credentials](#4-set-your-azure-credentials)
+5. [Run it (one command)](#5-run-it-one-command)
+6. [Open it in the browser (through the proxy)](#6-open-it-in-the-browser-through-the-proxy)
+7. [Terminal-only option](#7-terminal-only-option)
+8. [Keep it running after you log out](#8-keep-it-running-after-you-log-out)
+9. [Troubleshooting every error](#9-troubleshooting-every-error)
+10. [Optional — the original React frontend](#10-optional--the-original-react-frontend)
+11. [Quick command reference](#11-quick-command-reference)
 
 ---
 
-## 1. Why the single-file app fixes the VM problems
+## 1. What the app does (the 3-image co-creation)
+
+Three agents collaborate, and **each one produces an image that builds on the last**:
+
+1. **ARIA — Creative Director** decides the direction and paints a **partial,
+   unfinished underpainting** (image #1).
+2. **NEXUS — Creative Challenger** is shown ARIA's partial image, decides what to
+   **add**, and generates a new painting that **builds on image #1** (image #2,
+   created with Azure's image-to-image *edits* endpoint).
+3. **JUDGE — Critic** scores the work on 5 dimensions, then **combines both
+   paintings** into one finished, unified artwork (image #3).
+
+All three images are displayed in their own panels, and a **"⬇ Download all 3
+images"** button saves them as PNG files (`canvasmind_1_ARIA_partial.png`,
+`canvasmind_2_NEXUS_addition.png`, `canvasmind_3_JUDGE_final.png`).
+
+---
+
+## 2. Why this fixes the VM proxy problems
 
 The earlier blank screen / 404 errors happened because the React app ran on a
 **separate port (3000)** behind a sub-path reverse proxy, and Vite emitted
 absolute asset paths. `canvasmind_app.py` removes that entire class of problems:
 
-- **One port (8000), one origin.** The UI is served by the backend itself, so
-  there is no cross-origin call, no separate frontend port, no CORS.
-- **Relative paths + Server-Sent Events.** The page fetches `api/...` relative
-  to itself, so the proxy prefix is always preserved — no 404s.
+- **One port, one origin.** The UI is served by the backend itself — no
+  cross-origin call, no separate frontend port, no CORS.
+- **Relative paths + Server-Sent Events.** The page fetches `api/...` relative to
+  itself, so the proxy prefix is always preserved — no 404s.
 - **Correct Azure calls.** Uses `max_completion_tokens` and omits `temperature`,
-  matching the gpt-5.2 deployment requirements that broke the SDK provider.
-- **Images included.** Generates canvas images with `gpt-image-1` server-side
-  and streams them to the browser as base64 — nothing for the browser to fetch
-  cross-origin.
+  matching the gpt-5.2 requirements that broke the SDK provider.
+- **Images stream as base64.** Generated server-side with `gpt-image-1` and sent
+  inline — nothing for the browser to fetch cross-origin.
 
 ---
 
-## 2. One-time VM setup
+## 3. One-time VM setup
 
-Open the VS Code terminal connected to the VM and run:
+The launcher does this for you, but here it is explicitly. Open the VS Code
+terminal connected to the VM:
 
 ```bash
 cd ~/canvasmind        # or wherever the project lives, e.g. RL_Multi_Agent_ART/canvasmind
+python3 --version      # Python 3.11 expected
 
-# Python 3.11 (skip if already present)
-python3 --version
-
-# Create and activate a virtual environment
 python3 -m venv backend/venv
 source backend/venv/bin/activate
-
-# Install dependencies (requests, fastapi, uvicorn are the ones the app needs)
 pip install --upgrade pip
-pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt    # installs requests, fastapi, uvicorn, ...
 ```
-
-That's all the setup. The single-file app needs only `requests`, `fastapi`, and
-`uvicorn`, which are all in `requirements.txt`.
 
 ---
 
-## 3. Set your Azure credentials
+## 4. Set your Azure credentials
 
 The app reads credentials from the **shell environment first**, then from
 `backend/.env`. On the GPU VM the key and endpoint are usually already exported.
-Confirm with:
+Confirm:
 
 ```bash
 echo "$AZURE_OPENAI_API_KEY"      # should print your key
@@ -102,24 +116,30 @@ AZURE_OPENAI_DEPLOYMENT_GPTTEXT52=gpt-5.2
 AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1=gpt-image-1
 ```
 
-> If `gpt-image-1` is not deployed in your resource, leave it blank — the app
-> still runs, just without canvas images (untick "Generate images" in the UI).
+> **Image-to-image note:** NEXUS and JUDGE feed the previous image(s) into the
+> next step using Azure's `images/edits` endpoint. If your `gpt-image-1`
+> deployment only supports generation, the app **automatically falls back** to a
+> fresh generation with a descriptive prompt — so you still get all 3 images.
+> If `gpt-image-1` is not deployed at all, leave it blank and the app runs as a
+> text-only dialogue.
 
 ---
 
-## 4. Option A — Run the single-file web app
+## 5. Run it (one command)
 
 ```bash
-cd ~/canvasmind
-source backend/venv/bin/activate
-python canvasmind_app.py --port 8000
+cd ~/canvasmind          # or RL_Multi_Agent_ART/canvasmind
+chmod +x launch.sh       # first time only
+./launch.sh              # runs on port 8000
+#   ./launch.sh 3000     # or any port already exposed by the proxy
 ```
 
-You should see:
+The launcher checks credentials, ensures dependencies (creating a venv if
+needed), then starts the app. You should see:
 
 ```
 ================================================================
-  CanvasMind — Single-File Full-Stack App
+  CanvasMind — Single-File App (3-Image Co-Creation)
 ================================================================
   Azure Endpoint  : https://your-resource.openai.azure.com/
   API Key         : ****abcd
@@ -128,52 +148,49 @@ You should see:
   Image Deployment: gpt-image-1
 ================================================================
   Open the app at:  http://localhost:8000/
-  Behind a proxy :  https://<host>/.../proxy/8000/
-
 INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
-Leave it running. If you see the `FATAL: Missing required environment variables`
-message instead, go back to [Section 3](#3-set-your-azure-credentials).
+If you see `FATAL: Missing required environment variables` instead, go back to
+[Section 4](#4-set-your-azure-credentials).
+
+> **Windows / local:** use `.\launch.ps1 -Port 8000` (or `python canvasmind_app.py --port 8000`).
 
 ---
 
-## 5. Open it in the browser (through the proxy)
+## 6. Open it in the browser (through the proxy)
 
-Because everything is on **port 8000**, open the proxy URL for port 8000
-(not 3000):
+Everything is on **port 8000**, so open the proxy URL for **8000** (not 3000):
 
 ```
 https://rniazure.tcsapps.com/dev-workspaces/RAMA-GPU-A100/proxy/8000/
 ```
 
-Replace `RAMA-GPU-A100` with your workspace name. You'll see the CanvasMind UI:
+Replace `RAMA-GPU-A100` with your workspace name. In the UI:
 
-1. Type a creative brief (or keep the default), set rounds, optionally a style hint.
-2. Click **Start Session**.
-3. Watch live:
-   - **ARIA** (left) proposes the artistic direction.
-   - **NEXUS** (right) challenges and refines it.
-   - **JUDGE** (center, below the canvas) scores all 5 dimensions each round.
-   - The **canvas image** for each round appears in the center (if `gpt-image-1` is enabled).
-   - A green **CONVERGED** banner shows when the agents agree (composite ≥ 7.5).
+1. Type a creative brief (or keep the default) and an optional style hint.
+2. Click **Start Co-Creation**.
+3. Watch the three stages unfold live:
+   - **ARIA** (left feed) explains its plan; its **partial painting** appears in slot 1.
+   - **NEXUS** (right feed) decides what to add; its painting **built on ARIA's**
+     appears in slot 2.
+   - **JUDGE** (center, below the gallery) scores all 5 dimensions, then its
+     **final combined artwork** appears in slot 3.
+4. Click **⬇ Download all 3 images** to save every stage as a PNG.
 
 The bottom strip is a live event log.
 
-> **No port 8000 in the proxy list?** Ask for port 8000 to be exposed, or run on
-> a port that is already proxied: `python canvasmind_app.py --port 3000` and open
-> `.../proxy/3000/`.
+> **No port 8000 in the proxy list?** Run on a port that is already proxied:
+> `./launch.sh 3000` and open `.../proxy/3000/`.
 
 ---
 
-## 6. Option B — Run the terminal simulation
+## 7. Terminal-only option
 
-No browser needed — the entire conversation prints in the terminal:
+No browser needed — the whole conversation prints in the terminal:
 
 ```bash
-cd ~/canvasmind
-source backend/venv/bin/activate
-
+cd ~/canvasmind && source backend/venv/bin/activate
 python simulate_chat.py --prompt "A serene mountain lake at golden hour" --rounds 5
 python simulate_chat.py --prompt "A cathedral interior" --rounds 6 --style "baroque chiaroscuro"
 ```
@@ -186,17 +203,15 @@ python simulate_chat.py --prompt "A cathedral interior" --rounds 6 --style "baro
 
 ---
 
-## 7. Keep it running after you log out
+## 8. Keep it running after you log out
 
-So the app survives an SSH/VS Code disconnect, run it under `tmux`:
+Under `tmux` (survives an SSH/VS Code disconnect):
 
 ```bash
 sudo apt-get install -y tmux        # once
 tmux new -s canvasmind
-cd ~/canvasmind && source backend/venv/bin/activate
-python canvasmind_app.py --port 8000
-# detach: press Ctrl+B then D
-# reattach later: tmux attach -t canvasmind
+cd ~/canvasmind && ./launch.sh
+# detach: Ctrl+B then D   ·   reattach: tmux attach -t canvasmind
 ```
 
 Or as a permanent systemd service:
@@ -227,27 +242,29 @@ sudo journalctl -u canvasmind -f      # live logs
 
 ---
 
-## 8. Troubleshooting every error
+## 9. Troubleshooting every error
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `FATAL: Missing required environment variables` | Key/endpoint not exported and not in `.env` | `export AZURE_OPENAI_API_KEY=...` and `AZURE_OPENAI_ENDPOINT=...` (Section 3) |
+| `FATAL: Missing required environment variables` | Key/endpoint not exported and not in `.env` | `export AZURE_OPENAI_API_KEY=...` and `AZURE_OPENAI_ENDPOINT=...` (Section 4) |
 | `HTTP 401 ... invalid subscription key` | Wrong key or endpoint | Re-copy from Azure Portal → Keys and Endpoint |
 | `HTTP 404 ... DeploymentNotFound` | Wrong deployment name | Make `AZURE_OPENAI_DEPLOYMENT_GPTTEXT52` match the exact name in Azure AI Studio → Deployments |
 | `unsupported parameter: max_tokens` | Old SDK provider, not this app | Use `canvasmind_app.py` / `simulate_chat.py` — they send `max_completion_tokens` |
-| `temperature ... not supported` | Custom temperature on a reasoning model | These files send no temperature; you're set |
-| Browser shows blank / 404 on assets | You opened the **React (3000)** app behind the proxy | Use the single-file app on **port 8000** instead |
+| Image #2 / #3 falls back to a fresh image | `gpt-image-1` deployment has no `edits` capability | Expected — the app logs a warning and regenerates so you still get 3 images |
+| Only image #1 appears | `gpt-image-1` slow or rate-limited | Wait; check Azure quota. Image steps are non-fatal and logged |
+| No images at all, just text | `AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1` blank | Set the image deployment name in `backend/.env` |
+| Browser shows blank / 404 on assets | You opened the **React (3000)** app | Use the single-file app on **port 8000** |
 | `Blocked request ... host not allowed` (React only) | Vite host allowlist | Already fixed in `vite.config.ts` via `allowedHosts: ['rniazure.tcsapps.com']` |
-| Canvas image never appears | `gpt-image-1` not deployed or slow | Confirm the image deployment exists; or untick "Generate images" |
-| SSE stream stops early behind proxy | Proxy buffering | The app sets `X-Accel-Buffering: no`; if your proxy still buffers, use Option B (terminal) |
-| `ModuleNotFoundError: requests` | Deps not installed / venv not active | `source backend/venv/bin/activate && pip install -r backend/requirements.txt` |
+| SSE stream stops early behind proxy | Proxy buffering | The app sets `X-Accel-Buffering: no`; if your proxy still buffers, use the terminal option (Section 7) |
+| `ModuleNotFoundError: requests` | Deps not installed / venv not active | `./launch.sh` handles this, or `pip install -r backend/requirements.txt` in the venv |
 
 ---
 
-## 9. Optional — the original React frontend
+## 10. Optional — the original React frontend
 
-You do **not** need this for the VM demo, but if you want the full React UI on
-port 3000, the config is already fixed for the proxy:
+You do **not** need this for the VM demo. If you want the React UI on port 3000,
+the config is already fixed for the proxy (`base: './'` +
+`allowedHosts: ['rniazure.tcsapps.com']`):
 
 ```bash
 cd ~/canvasmind/frontend
@@ -257,42 +274,39 @@ npm run preview -- --host 0.0.0.0 --port 3000
 # open https://<host>/.../proxy/3000/
 ```
 
-`vite.config.ts` already uses `base: './'` (relative paths) and
-`allowedHosts: ['rniazure.tcsapps.com']`. The React app talks to the backend via
-`VITE_BACKEND_URL` in `frontend/.env`; for full end-to-end you must also expose
-the backend (port 8000) through the proxy and point those URLs at it. Because
-that wiring is fragile through a corporate proxy, **the single-file app
-(Option A) is the recommended path.**
+The React app talks to the backend via `VITE_BACKEND_URL` in `frontend/.env`; for
+full end-to-end you must also expose the backend through the proxy. Because that
+wiring is fragile through a corporate proxy, **the single-file app is the
+recommended path.**
 
 ---
 
-## 10. Quick command reference
+## 11. Quick command reference
 
 ```bash
-# Activate venv (every new shell)
-source ~/canvasmind/backend/venv/bin/activate
+# One-command launch (sets up deps, starts the app on port 8000)
+cd ~/canvasmind && ./launch.sh
+#   → open https://<host>/dev-workspaces/<workspace>/proxy/8000/
 
 # Check creds are present
 echo "$AZURE_OPENAI_API_KEY"; echo "$AZURE_OPENAI_ENDPOINT"
 
-# Run the full web app (one port, browser UI)
+# Run the app directly (venv active)
 python ~/canvasmind/canvasmind_app.py --port 8000
-#   → open https://<host>/dev-workspaces/<workspace>/proxy/8000/
 
-# Run the terminal-only demo
+# Terminal-only demo
 python ~/canvasmind/simulate_chat.py --prompt "A neon koi pond" --rounds 5
 
 # Health check
 curl http://localhost:8000/api/health
 
-# Run under tmux (survives disconnect)
-tmux new -s canvasmind
-#   ... start the app, then Ctrl+B then D to detach
+# tmux (survives disconnect)
+tmux new -s canvasmind     # start, then Ctrl+B then D
 tmux attach -t canvasmind
 ```
 
 ---
 
 *CanvasMind — TCS Research Computational Creativity Platform*
-*Single-file app: `canvasmind_app.py` · Terminal demo: `simulate_chat.py`*
-*Azure: gpt-5.2 (text) + gpt-image-1 (image) via REST · API version 2025-04-01-preview*
+*Launcher: `launch.sh` · App: `canvasmind_app.py` · Terminal demo: `simulate_chat.py`*
+*Azure: gpt-5.2 (text) + gpt-image-1 (image, with image-to-image edits) via REST · API version 2025-04-01-preview*

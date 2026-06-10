@@ -3,6 +3,20 @@
 
 ---
 
+> ## ⭐ Fastest path (read this first)
+> The recommended way to run CanvasMind on the VM is the **single-file app** with
+> the **one-command launcher** — no React build, no separate ports, no proxy 404s:
+> ```bash
+> cd ~/canvasmind && ./launch.sh      # → open .../proxy/8000/
+> ```
+> It runs the **3-image co-creation pipeline** (ARIA paints a partial image →
+> NEXUS builds on it → JUDGE combines both into a final artwork, with a
+> *Download all 3 images* button). Full walkthrough: **[RUN_ON_VM.md](RUN_ON_VM.md)**
+> and [Section 19](#19-single-file-app--one-command-launcher-recommended) below.
+> The detailed modular-stack instructions (Sections 4–14) remain for reference.
+
+---
+
 ## Table of Contents
 
 1. [What Is CanvasMind](#1-what-is-canvasmind)
@@ -23,6 +37,7 @@
 16. [Quick Command Reference](#16-quick-command-reference)
 17. [Backend-Only Agent Simulation (No Frontend Needed)](#17-backend-only-agent-simulation-no-frontend-needed)
 18. [Running the Frontend Behind a Reverse Proxy (Sub-Path URL)](#18-running-the-frontend-behind-a-reverse-proxy-sub-path-url)
+19. [Single-File App & One-Command Launcher (Recommended)](#19-single-file-app--one-command-launcher-recommended)
 
 ---
 
@@ -1538,6 +1553,92 @@ If the proxy makes full end-to-end frontend wiring difficult, use the
 
 ---
 
+## 19. Single-File App & One-Command Launcher (Recommended)
+
+This is the simplest, most reliable way to run the whole product on the VM. The
+**single-file app** (`canvasmind_app.py`) serves the web UI **and** the backend
+together on **one port**, so there is no separate React build, no second port, no
+CORS, and no reverse-proxy 404s. It is the recommended path for the VM.
+
+### Why it works where the modular stack failed
+
+- **Correct Azure calls.** It calls Azure via **raw REST** with
+  `max_completion_tokens` and **no custom temperature** — exactly what the
+  `gpt-5.2` deployment requires. (The older `backend/providers` SDK path sent
+  `max_tokens`/`temperature`, which `gpt-5.2` rejects.)
+- **One origin.** The browser fetches `api/...` relative to the page and streams
+  events over Server-Sent Events, so the proxy prefix is always preserved.
+
+### The 3-image co-creation pipeline
+
+Each agent produces an image that builds on the previous one:
+
+1. **ARIA — Creative Director** decides the direction and paints a **partial,
+   unfinished underpainting** (image #1) via `images/generations`.
+2. **NEXUS — Creative Challenger** is shown ARIA's image, decides what to **add**,
+   and generates a painting that **builds on image #1** (image #2) via the
+   image-to-image `images/edits` endpoint.
+3. **JUDGE — Critic** scores the work on 5 dimensions, then **combines both
+   paintings** into one finished artwork (image #3) via a multi-image `images/edits`
+   call.
+
+All three appear in their own panels, with a **⬇ Download all 3 images** button.
+
+> **Image-to-image fallback:** if your `gpt-image-1` deployment doesn't support
+> the `edits` endpoint, the app automatically falls back to a fresh generation
+> with a descriptive prompt, so you always get all three images. If `gpt-image-1`
+> isn't deployed at all, the app runs as a text-only dialogue.
+
+### Run it (one command)
+
+```bash
+cd ~/canvasmind          # or RL_Multi_Agent_ART/canvasmind
+chmod +x launch.sh       # first time only
+./launch.sh              # port 8000  ·  ./launch.sh 3000 for a different port
+```
+
+`launch.sh` verifies credentials, installs dependencies (creating a venv if
+needed), and starts the app. On Windows use `.\launch.ps1 -Port 8000`, or run the
+app directly with `python canvasmind_app.py --port 8000`.
+
+Then open the proxy URL for **port 8000**:
+
+```
+https://rniazure.tcsapps.com/dev-workspaces/<your-workspace>/proxy/8000/
+```
+
+Type a brief → **Start Co-Creation** → watch the three images build on each other
+→ **Download all 3 images**.
+
+### Credentials
+
+The app reads `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` from the **shell
+environment first** (usually already exported on the GPU VM), then from
+`backend/.env`, which supplies the version and deployment names:
+
+```bash
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
+AZURE_OPENAI_DEPLOYMENT_GPTTEXT52=gpt-5.2
+AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1=gpt-image-1
+```
+
+### Verified end-to-end
+
+The full flow was tested through the real HTTP server + SSE (Azure calls stubbed):
+
+```
+session → stage(ARIA) → agent(ARIA) → image(1·partial)
+        → stage(NEXUS) → agent(NEXUS) → image(2·builds on ARIA)
+        → stage(JUDGE) → critic → image(3·final combined)
+        → summary → done          ·  3 valid downloadable PNGs
+```
+
+For the complete VM walkthrough (setup, tmux/systemd, troubleshooting), see
+**[RUN_ON_VM.md](RUN_ON_VM.md)**.
+
+---
+
 *CanvasMind — TCS Research Computational Creativity Platform*
-*Backend: Python 3.11 / FastAPI 0.111 / Pydantic 2.7 / Azure OpenAI SDK 1.35*
-*Frontend: React 18.3 / TypeScript 5.4 / Vite 5.3 / Zustand 4.5 / Framer Motion 11*
+*Recommended: `launch.sh` → `canvasmind_app.py` (single-file app, 3-image co-creation)*
+*Backend: Python 3.11 / FastAPI 0.111 / Pydantic 2.7 / Azure OpenAI (gpt-5.2 + gpt-image-1) via REST*
+*Frontend: single-file UI (SSE) · React 18.3 / TypeScript 5.4 / Vite 5.3 stack retained for reference*
