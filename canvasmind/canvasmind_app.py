@@ -36,6 +36,7 @@ import base64
 import json
 import os
 import queue
+import random
 import sys
 import threading
 import time
@@ -525,6 +526,42 @@ async def start(request: Request) -> JSONResponse:
     return JSONResponse({"session_id": sess.id})
 
 
+# Eclectic seeds nudged into the prompt so each "Surprise Me" brief is different
+# and striking. The model is free to wander far from them.
+INSPIRE_SEEDS = [
+    "bioluminescent", "brutalist", "baroque", "vaporwave", "Art Nouveau", "ukiyo-e",
+    "surrealist", "cyberpunk", "Afrofuturist", "deep-sea", "celestial", "folkloric",
+    "post-apocalyptic", "glitch", "Renaissance", "minimalist", "dreamlike", "mythological",
+    "botanical", "cosmic", "noir", "psychedelic", "steampunk", "stained-glass",
+    "infrared", "papercraft", "fresco", "neon", "monsoon", "desert", "arctic", "volcanic",
+]
+
+
+@app.get("/api/inspire")
+def inspire() -> JSONResponse:
+    """The AI invents a striking, unexpected art brief + style on its own."""
+    s1, s2 = random.sample(INSPIRE_SEEDS, 2)
+    system = ("You are a bold, imaginative art-brief generator for a painting studio. "
+              "You invent striking, unexpected, vivid concepts that are a joy to paint.")
+    user = (
+        f"Invent ONE original, surprising, visually rich art brief and a matching artistic style. "
+        f"Loosely draw on '{s1}' and '{s2}', but feel free to go somewhere completely unexpected. "
+        f"Be specific and evocative about subject, setting, mood, and light. Keep the brief to 1-2 sentences.\n\n"
+        f'Return ONLY JSON: {{"prompt": "<the brief>", "style": "<a short style descriptor>"}}')
+    try:
+        raw = azure_chat_completion(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            max_completion_tokens=400)
+        data = extract_json_object(raw)
+        prompt = str(data.get("prompt", "")).strip()
+        style = str(data.get("style", "")).strip()
+        if not prompt:
+            raise ValueError("empty brief")
+        return JSONResponse({"prompt": prompt, "style": style})
+    except Exception as exc:
+        return JSONResponse({"error": f"Could not invent a brief: {exc}"}, status_code=500)
+
+
 @app.get("/api/stream/{session_id}")
 async def stream(session_id: str) -> StreamingResponse:
     sess = SESSIONS.get(session_id)
@@ -587,6 +624,16 @@ INDEX_HTML = r"""<!DOCTYPE html>
   button{background:linear-gradient(90deg,var(--aria),var(--nexus));color:#08080f;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;cursor:pointer;}
   button.ghost{background:transparent;border:1px solid var(--border);color:var(--txt);}
   button:disabled{opacity:.4;cursor:not-allowed;}
+  /* mode switch + panels */
+  .modes{display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .mode{background:transparent;color:var(--muted);border:none;border-radius:0;padding:8px 14px;font-weight:600;font-size:13px;}
+  .mode.active{background:linear-gradient(90deg,var(--aria),var(--nexus));color:#08080f;}
+  .panel{display:flex;gap:10px;align-items:center;flex:1;flex-wrap:wrap;}
+  .panel.hidden,.brief.hidden{display:none;}
+  #surpriseBtn{font-size:14px;}
+  .brief{flex:1;min-width:220px;background:var(--card);border:1px solid var(--judge);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--txt);animation:fade .25s ease;}
+  .brief .bk{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--judge);font-weight:700;margin-right:5px;}
+  .brief .bk2{color:var(--nexus);margin-left:10px;}
   main{flex:1;display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:10px;padding:10px;overflow:hidden;min-height:0;}
   .col{background:var(--bg2);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
   .col.aria{border-color:rgba(34,211,238,.35);}
@@ -642,9 +689,24 @@ INDEX_HTML = r"""<!DOCTYPE html>
 </header>
 
 <div class="promptbar">
-  <input type="text" id="prompt" placeholder="Describe the artwork for the agents to create..." value="A serene mountain lake at golden hour"/>
-  <input type="text" id="style" placeholder="style hint (optional)" style="max-width:180px"/>
-  <button id="startBtn">Start Co-Creation</button>
+  <div class="modes">
+    <button id="modeAi" class="mode active" title="Let the AI invent a striking brief">✨ AI Surprise</button>
+    <button id="modeManual" class="mode" title="Write your own prompt">✍️ Write my own</button>
+  </div>
+
+  <!-- AI mode: the agent invents a creative brief, then creates -->
+  <div id="aiPanel" class="panel">
+    <button id="surpriseBtn">✨ Surprise Me — invent a brief &amp; create</button>
+    <div id="briefCard" class="brief hidden"></div>
+  </div>
+
+  <!-- Manual mode: the user writes their own prompt -->
+  <div id="manualPanel" class="panel hidden">
+    <input type="text" id="prompt" placeholder="Describe the artwork for the agents to create..." value="A serene mountain lake at golden hour"/>
+    <input type="text" id="style" placeholder="style hint (optional)" style="max-width:180px"/>
+    <button id="startBtn">Start Co-Creation</button>
+  </div>
+
   <button id="downloadBtn" class="ghost" disabled>⬇ Download all 3 images</button>
 </div>
 
@@ -755,9 +817,25 @@ function downloadAll(){
 }
 $('downloadBtn').onclick = downloadAll;
 
-$('startBtn').onclick = async () => {
-  const prompt = $('prompt').value.trim();
-  if(!prompt){ alert('Enter a prompt first'); return; }
+// --- mode switch: AI Surprise vs. Write my own --------------------------
+function showMode(mode){
+  const ai = (mode === 'ai');
+  $('aiPanel').classList.toggle('hidden', !ai);
+  $('manualPanel').classList.toggle('hidden', ai);
+  $('modeAi').classList.toggle('active', ai);
+  $('modeManual').classList.toggle('active', !ai);
+}
+$('modeAi').onclick = () => showMode('ai');
+$('modeManual').onclick = () => showMode('manual');
+
+function setBusy(busy){
+  $('startBtn').disabled = busy;
+  $('surpriseBtn').disabled = busy;
+}
+
+// --- shared: run one co-creation session with a given brief -------------
+async function startSession(prompt, style){
+  if(!prompt){ alert('Enter (or generate) a prompt first'); return; }
   $('ariaFeed').innerHTML=''; $('nexusFeed').innerHTML='';
   $('criticBody').innerHTML='Awaiting evaluation…'; $('stageLabel').textContent='';
   images.aria=images.nexus=images.judge=null; $('downloadBtn').disabled=true;
@@ -765,15 +843,15 @@ $('startBtn').onclick = async () => {
   setSlot('nexus','<div class="ph">NEXUS extends ARIA\'s image here.</div>');
   setSlot('judge','<div class="ph">JUDGE merges both into the final artwork here.</div>');
   if(evtSource) evtSource.close();
-  $('startBtn').disabled = true; setState('starting…','run');
+  setBusy(true); setState('starting…','run');
 
   let res;
   try{
     res = await fetch('api/start', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({prompt, style: $('style').value.trim(), images:true})});
-  }catch(e){ setState('failed to start','');$('startBtn').disabled=false; return; }
+      body: JSON.stringify({prompt, style: style||'', images:true})});
+  }catch(e){ setState('failed to start',''); setBusy(false); return; }
   const {session_id, error} = await res.json();
-  if(error){ alert(error); setState('error','');$('startBtn').disabled=false; return; }
+  if(error){ alert(error); setState('error',''); setBusy(false); return; }
 
   log('Session '+session_id+' started'); setState('running','run');
   evtSource = new EventSource('api/stream/'+session_id);
@@ -800,10 +878,35 @@ $('startBtn').onclick = async () => {
         log(`Done: ${ev.outcome} · composite ${ev.composite?ev.composite.toFixed(1):'-'} · ${ev.elapsed}s`);
         setState(ev.outcome,'ok'); break;
       case 'error': log('ERROR: '+ev.message); alert('Error: '+ev.message); setState('error',''); break;
-      case 'done': evtSource.close(); $('startBtn').disabled=false; break;
+      case 'done': evtSource.close(); setBusy(false); break;
     }
   };
-  evtSource.onerror = () => { log('stream closed'); $('startBtn').disabled=false; };
+  evtSource.onerror = () => { log('stream closed'); setBusy(false); };
+}
+
+// Manual mode: start with the user's own prompt
+$('startBtn').onclick = () => startSession($('prompt').value.trim(), $('style').value.trim());
+
+// AI Surprise mode: the agent invents a striking brief, the UI reflects it, then creates
+$('surpriseBtn').onclick = async () => {
+  setBusy(true); setState('inventing a brief…','run');
+  $('briefCard').classList.add('hidden');
+  try{
+    const data = await (await fetch('api/inspire')).json();
+    if(data.error) throw new Error(data.error);
+    // Reflect the AI's choice in the UI (and keep the manual fields in sync)
+    $('prompt').value = data.prompt || '';
+    $('style').value = data.style || '';
+    $('briefCard').innerHTML =
+      `<span class="bk">AI brief</span>${esc(data.prompt)}` +
+      (data.style ? `<span class="bk bk2">style</span>${esc(data.style)}` : '');
+    $('briefCard').classList.remove('hidden');
+    log('✨ AI invented a brief: '+data.prompt + (data.style?(' · style: '+data.style):''));
+    await startSession(data.prompt, data.style || '');
+  }catch(e){
+    setBusy(false); setState('error','');
+    log('Surprise failed: '+e.message); alert('Could not invent a brief: '+e.message);
+  }
 };
 
 init();

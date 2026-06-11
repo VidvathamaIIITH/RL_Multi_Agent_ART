@@ -1569,9 +1569,20 @@ CORS, and no reverse-proxy 404s. It is the recommended path for the VM.
 - **One origin.** The browser fetches `api/...` relative to the page and streams
   events over Server-Sent Events, so the proxy prefix is always preserved.
 
+### Two ways to start a brief
+
+At the top of the page a toggle offers two modes:
+
+- **✨ AI Surprise** *(default)* — **Surprise Me** calls `GET /api/inspire`, where
+  the AI invents a striking, unexpected brief + style on its own (nudged by random
+  seeds for variety). The chosen brief is shown in the UI, then co-creation starts.
+- **✍️ Write my own** — the manual prompt box, where the user types their own
+  brief + optional style and clicks **Start Co-Creation**.
+
 ### The 3-image co-creation pipeline
 
-Each agent produces an image that builds on the previous one:
+Whichever mode picks the brief, each agent then produces an image that builds on
+the previous one:
 
 1. **ARIA — Creative Director** decides the direction and paints a **partial,
    unfinished underpainting** (image #1) via `images/generations`.

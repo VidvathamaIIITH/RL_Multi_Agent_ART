@@ -50,8 +50,13 @@ chmod +x launch.sh     # first time only
 ```
 
 `launch.sh` checks credentials, installs dependencies if needed, and starts
-[`canvasmind_app.py`](canvasmind_app.py). Open the app, type a brief, and click
-**Start Co-Creation**:
+[`canvasmind_app.py`](canvasmind_app.py). Open the app and choose how to begin:
+
+- **✨ AI Surprise** — click **Surprise Me** and the AI invents a striking brief +
+  style on its own (shown in the UI), then creates.
+- **✍️ Write my own** — type your own brief and click **Start Co-Creation**.
+
+Then the three agents collaborate:
 
 1. **ARIA** paints a **partial** underpainting (image #1).
 2. **NEXUS** is fed ARIA's image, decides what to add, and **builds on it** (image #2).

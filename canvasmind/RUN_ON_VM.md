@@ -40,7 +40,16 @@ backend together.
 
 ## 1. What the app does (the 3-image co-creation)
 
-Three agents collaborate, and **each one produces an image that builds on the last**:
+**Two ways to start a brief** (toggle at the top of the page):
+
+- **✨ AI Surprise** *(default)* — click **"Surprise Me"** and the AI invents a
+  striking, unexpected brief and style on its own. The chosen brief is shown in
+  the UI, then the co-creation begins automatically.
+- **✍️ Write my own** — switch to the manual prompt box, type your own brief and
+  optional style, and click **Start Co-Creation**.
+
+Either way, three agents then collaborate, and **each one produces an image that
+builds on the last**:
 
 1. **ARIA — Creative Director** decides the direction and paints a **partial,
    unfinished underpainting** (image #1).
@@ -168,9 +177,11 @@ https://rniazure.tcsapps.com/dev-workspaces/RAMA-GPU-A100/proxy/8000/
 
 Replace `RAMA-GPU-A100` with your workspace name. In the UI:
 
-1. Type a creative brief (or keep the default) and an optional style hint.
-2. Click **Start Co-Creation**.
-3. Watch the three stages unfold live:
+1. Pick a mode at the top:
+   - **✨ AI Surprise** → click **"Surprise Me"** to let the AI invent a striking
+     brief + style (shown in the UI, then it creates), **or**
+   - **✍️ Write my own** → type your own brief + optional style, click **Start Co-Creation**.
+2. Watch the three stages unfold live:
    - **ARIA** (left feed) explains its plan; its **partial painting** appears in slot 1.
    - **NEXUS** (right feed) decides what to add; its painting **built on ARIA's**
      appears in slot 2.
