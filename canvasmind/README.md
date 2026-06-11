@@ -56,15 +56,20 @@ chmod +x launch.sh     # first time only
   style on its own (shown in the UI), then creates.
 - **✍️ Write my own** — type your own brief and click **Start Co-Creation**.
 
-Then the three agents collaborate:
+Then ARIA and NEXUS paint **one shared canvas, step by step**, taking turns to
+**add a single new object each turn** (additive collaboration, not refinement):
 
-1. **ARIA** paints a **partial** underpainting (image #1).
-2. **NEXUS** is fed ARIA's image, decides what to add, and **builds on it** (image #2).
-3. **JUDGE** scores the work and **combines both** into a final artwork (image #3).
+1. The canvas starts blank; **ARIA** adds the first object → displayed.
+2. That canvas is handed to **NEXUS**, which **adds one new object** on top,
+   keeping everything already there → displayed.
+3. Back to ARIA, then NEXUS… for **N back-and-forths** (default **5 → 10 step
+   images**), every step shown in a left-to-right filmstrip.
+4. **JUDGE makes no edits** — it scores the collaboration and presents the final
+   accumulated canvas as the combined result.
 
-All three images display in their own panels, with a **⬇ Download all 3 images**
-button. This path avoids every reverse-proxy / CORS / port issue — see
-[RUN_ON_VM.md](RUN_ON_VM.md) for the full VM walkthrough.
+A **⬇ Download all steps** button saves every step image. This path avoids every
+reverse-proxy / CORS / port issue — see [RUN_ON_VM.md](RUN_ON_VM.md) for the full
+VM walkthrough.
 
 > The single-file app calls Azure via raw REST with `max_completion_tokens` (no
 > custom temperature), which is what `gpt-5.2` requires. The terminal-only demo

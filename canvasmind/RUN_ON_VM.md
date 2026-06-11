@@ -48,20 +48,28 @@ backend together.
 - **✍️ Write my own** — switch to the manual prompt box, type your own brief and
   optional style, and click **Start Co-Creation**.
 
-Either way, three agents then collaborate, and **each one produces an image that
-builds on the last**:
+Either way, **ARIA and NEXUS then paint ONE shared canvas, step by step, taking
+turns to add a single new object each turn** — true additive collaboration:
 
-1. **ARIA — Creative Director** decides the direction and paints a **partial,
-   unfinished underpainting** (image #1).
-2. **NEXUS — Creative Challenger** is shown ARIA's partial image, decides what to
-   **add**, and generates a new painting that **builds on image #1** (image #2,
-   created with Azure's image-to-image *edits* endpoint).
-3. **JUDGE — Critic** scores the work on 5 dimensions, then **combines both
-   paintings** into one finished, unified artwork (image #3).
+1. The canvas starts blank. **ARIA** adds the first object (e.g. a mountain
+   range) → image displayed.
+2. That exact canvas is handed to **NEXUS**, which looks at it and **adds one new
+   object** on top (e.g. a forest), preserving everything already there → image displayed.
+3. Back to **ARIA**, which adds another new object → displayed. …and so on.
 
-All three images are displayed in their own panels, and a **"⬇ Download all 3
-images"** button saves them as PNG files (`canvasmind_1_ARIA_partial.png`,
-`canvasmind_2_NEXUS_addition.png`, `canvasmind_3_JUDGE_final.png`).
+This continues for **N back-and-forths** (default **5 → 10 turns → 10 images**).
+**Every step is displayed** in a left-to-right filmstrip so you can watch the
+painting grow object by object (exactly like the progressive reference frames).
+
+- Each turn uses Azure's image-to-image *edits* endpoint with the instruction to
+  **keep everything already painted and ADD only one new element** — so it is
+  additive collaboration, not a full repaint/refinement.
+- **JUDGE does NOT edit the artwork.** It only evaluates how well the two agents
+  collaborated and **presents the final accumulated canvas** as the combined
+  result (the last step already contains every contribution).
+
+The **"⬇ Download all steps"** button saves every step image
+(`canvasmind_step01_ARIA_<object>.png`, `…step02_NEXUS_<object>.png`, …).
 
 ---
 
@@ -148,7 +156,7 @@ needed), then starts the app. You should see:
 
 ```
 ================================================================
-  CanvasMind — Single-File App (3-Image Co-Creation)
+  CanvasMind — Step-by-Step Collaborative Painting
 ================================================================
   Azure Endpoint  : https://your-resource.openai.azure.com/
   API Key         : ****abcd
@@ -181,13 +189,14 @@ Replace `RAMA-GPU-A100` with your workspace name. In the UI:
    - **✨ AI Surprise** → click **"Surprise Me"** to let the AI invent a striking
      brief + style (shown in the UI, then it creates), **or**
    - **✍️ Write my own** → type your own brief + optional style, click **Start Co-Creation**.
-2. Watch the three stages unfold live:
-   - **ARIA** (left feed) explains its plan; its **partial painting** appears in slot 1.
-   - **NEXUS** (right feed) decides what to add; its painting **built on ARIA's**
-     appears in slot 2.
-   - **JUDGE** (center, below the gallery) scores all 5 dimensions, then its
-     **final combined artwork** appears in slot 3.
-4. Click **⬇ Download all 3 images** to save every stage as a PNG.
+2. Optionally set **Back-and-forths** (default 5 → 10 step images).
+3. Watch the painting grow live:
+   - The big **Shared Canvas** view updates to the latest step.
+   - The **filmstrip** below fills with every turn's image, left to right.
+   - **ARIA** (left feed) and **NEXUS** (right feed) each say what they see and
+     the one new object they add, so the conversation is legible.
+   - **JUDGE** scores the collaboration and the final canvas is marked **✓ FINAL**.
+4. Click **⬇ Download all steps** to save every step image as a PNG.
 
 The bottom strip is a live event log.
 

@@ -1579,26 +1579,28 @@ At the top of the page a toggle offers two modes:
 - **✍️ Write my own** — the manual prompt box, where the user types their own
   brief + optional style and clicks **Start Co-Creation**.
 
-### The 3-image co-creation pipeline
+### The step-by-step collaborative painting pipeline
 
-Whichever mode picks the brief, each agent then produces an image that builds on
-the previous one:
+Whichever mode picks the brief, ARIA and NEXUS then paint **one shared canvas,
+taking turns to add a single new object each turn**:
 
-1. **ARIA — Creative Director** decides the direction and paints a **partial,
-   unfinished underpainting** (image #1) via `images/generations`.
-2. **NEXUS — Creative Challenger** is shown ARIA's image, decides what to **add**,
-   and generates a painting that **builds on image #1** (image #2) via the
-   image-to-image `images/edits` endpoint.
-3. **JUDGE — Critic** scores the work on 5 dimensions, then **combines both
-   paintings** into one finished artwork (image #3) via a multi-image `images/edits`
-   call.
+1. The canvas starts blank. **ARIA** adds the first object via `images/generations`.
+2. That exact canvas is handed to **NEXUS**, which **adds one new object** on top
+   via the image-to-image `images/edits` endpoint — instructed to keep everything
+   already painted and only ADD the new element (additive, not a repaint).
+3. Back to ARIA, then NEXUS… for **N back-and-forths** (default **5 → 10 turns →
+   10 images**). **Every step is displayed** in a left-to-right filmstrip.
+4. **JUDGE makes no edits.** It scores the collaboration (including a
+   *collaboration quality* dimension) and **presents the final accumulated canvas**
+   as the combined result — the last step already contains every contribution.
 
-All three appear in their own panels, with a **⬇ Download all 3 images** button.
+Each step appears in the filmstrip, with a **⬇ Download all steps** button
+(`canvasmind_step01_ARIA_<object>.png`, …).
 
-> **Image-to-image fallback:** if your `gpt-image-1` deployment doesn't support
-> the `edits` endpoint, the app automatically falls back to a fresh generation
-> with a descriptive prompt, so you always get all three images. If `gpt-image-1`
-> isn't deployed at all, the app runs as a text-only dialogue.
+> **Image-to-image fallback:** the per-turn additions require the `gpt-image-1`
+> `edits` endpoint. If a turn's edit fails, the app logs a warning and keeps the
+> previous canvas (non-fatal) so the run continues. If `gpt-image-1` isn't deployed
+> at all, the agents still hold the step-by-step text conversation.
 
 ### Run it (one command)
 
@@ -1618,8 +1620,9 @@ Then open the proxy URL for **port 8000**:
 https://rniazure.tcsapps.com/dev-workspaces/<your-workspace>/proxy/8000/
 ```
 
-Type a brief → **Start Co-Creation** → watch the three images build on each other
-→ **Download all 3 images**.
+Type a brief → **Start Co-Creation** → watch ARIA and NEXUS take turns adding one
+object each to the shared canvas (every step shown in the filmstrip) →
+**Download all steps**.
 
 ### Credentials
 
@@ -1635,21 +1638,25 @@ AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1=gpt-image-1
 
 ### Verified end-to-end
 
-The full flow was tested through the real HTTP server + SSE (Azure calls stubbed):
+The full flow was tested through the real HTTP server + SSE (Azure calls stubbed),
+with 5 back-and-forths:
 
 ```
-session → stage(ARIA) → agent(ARIA) → image(1·partial)
-        → stage(NEXUS) → agent(NEXUS) → image(2·builds on ARIA)
-        → stage(JUDGE) → critic → image(3·final combined)
-        → summary → done          ·  3 valid downloadable PNGs
+session → turn1 ARIA  → image #1   (generation: first object)
+        → turn2 NEXUS → image #2   (edit: +1 object on the shared canvas)
+        → … alternating ARIA/NEXUS …
+        → turn10 NEXUS → image #10  (edit: +1 object)
+        → JUDGE critic (NO image edit) → final (= last canvas) → summary → done
 ```
 
-For the complete VM walkthrough (setup, tmux/systemd, troubleshooting), see
-**[RUN_ON_VM.md](RUN_ON_VM.md)**.
+Verified: exactly **10 step images** (turns 1–10), perfectly alternating
+ARIA/NEXUS, **1 generation + 9 additive edits**, JUDGE makes **no extra image**,
+and the final combined canvas is presented. For the complete VM walkthrough
+(setup, tmux/systemd, troubleshooting), see **[RUN_ON_VM.md](RUN_ON_VM.md)**.
 
 ---
 
 *CanvasMind — TCS Research Computational Creativity Platform*
-*Recommended: `launch.sh` → `canvasmind_app.py` (single-file app, 3-image co-creation)*
+*Recommended: `launch.sh` → `canvasmind_app.py` (single-file app, step-by-step collaborative painting)*
 *Backend: Python 3.11 / FastAPI 0.111 / Pydantic 2.7 / Azure OpenAI (gpt-5.2 + gpt-image-1) via REST*
 *Frontend: single-file UI (SSE) · React 18.3 / TypeScript 5.4 / Vite 5.3 stack retained for reference*
