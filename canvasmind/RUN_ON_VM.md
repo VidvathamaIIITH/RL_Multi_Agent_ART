@@ -48,6 +48,18 @@ backend together.
 - **✍️ Write my own** — switch to the manual prompt box, type your own brief and
   optional style, and click **Start Co-Creation**.
 
+**Generative-agent personas + expertise toggle.** ARIA and NEXUS are *generative
+agents* (after Park et al., *Generative Agents*, UIST'23): each has a seed-memory
+persona, a **memory stream** of what it and the other agent did, **retrieval**
+(recency + importance + relevance), and **reflection** — so the two agents
+genuinely *learn from each other* across turns. Two dropdowns set each agent's
+**expertise level** — **beginner / intermediate / expert** — which changes its
+persona, vocabulary, technique, and rendering sophistication (you can mix levels,
+e.g. ARIA expert + NEXUS beginner). The agent panels show each agent's level, the
+memories it *recalled* for a turn, and 🧠 *reflection* cards when it learns.
+Optionally set `AZURE_OPENAI_DEPLOYMENT_EMBED` in `backend/.env` to use true
+embedding-cosine relevance (otherwise a dependency-free lexical relevance is used).
+
 Either way, **ARIA and NEXUS then paint ONE shared canvas, step by step, taking
 turns to add a single new object each turn** — true additive collaboration:
 
