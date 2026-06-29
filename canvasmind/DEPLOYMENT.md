@@ -17,6 +17,15 @@
 
 ---
 
+> **Generative agents + RL research layer (latest).** ARIA and NEXUS are generative
+> agents (memory, retrieval, reflection) wrapped in an inference-time RL layer:
+> critic-as-reward-model with best-of-N selection, misaligned per-agent rewards + a
+> UCB strategy bandit, multi-agent Shapley credit assignment, an empowerment agency
+> metric, and a Goodhart reward-hacking monitor, all shown in a live Research
+> Dashboard. The briefing exposes per-agent **expertise** (beginner/intermediate/expert)
+> and a **system-autonomy** dial. Tune the RL cost with `CM_BEST_OF_N` (default 2).
+> See [RUN_ON_VM.md](RUN_ON_VM.md) section 6 for the full walkthrough.
+
 ## Table of Contents
 
 1. [What Is CanvasMind](#1-what-is-canvasmind)

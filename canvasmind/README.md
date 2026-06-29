@@ -6,6 +6,16 @@ A production-ready desktop application where collaborative AI painting agents (A
 
 ---
 
+> **Generative agents + RL research layer.** ARIA and NEXUS are generative agents
+> (memory, retrieval, reflection — after Park et al., 2023) wrapped in an
+> inference-time RL layer: a critic-as-reward-model with **best-of-N** selection,
+> **misaligned per-agent rewards** + a **UCB strategy bandit**, multi-agent
+> **Shapley credit assignment**, an **empowerment** agency metric, and a
+> **Goodhart reward-hacking monitor** — surfaced in a live **Research Dashboard**.
+> Briefing controls set each agent's **expertise** (beginner / intermediate / expert)
+> and the **system autonomy** (human-led to autonomous). Full details:
+> [RUN_ON_VM.md](RUN_ON_VM.md) section 6.
+
 ## Architecture
 
 ```
