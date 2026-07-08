@@ -15,8 +15,10 @@ The system consists of two parts running in tandem:
 3. [Start the Backend Server](#3-start-the-backend-server)
 4. [Start the Cinematic Frontend](#4-start-the-cinematic-frontend)
 5. [Open it in the browser (through the proxy)](#5-open-it-in-the-browser-through-the-proxy)
-6. [The agents & the RL research layer](#6-the-agents--the-rl-research-layer)
-7. [Troubleshooting every error](#7-troubleshooting-every-error)
+6. [The Quad-Agent Pipeline (four agents)](#6-the-quad-agent-pipeline-four-agents)
+7. [Hero artwork](#7-hero-artwork)
+8. [The agents & the RL research layer](#8-the-agents--the-rl-research-layer)
+9. [Troubleshooting every error](#9-troubleshooting-every-error)
 
 ---
 
@@ -110,9 +112,61 @@ https://rniazure.tcsapps.com/dev-workspaces/RAMA-GPU-A100/proxy/3000/
 4. The UI will transition to the Stage. You will see ARIA on the left, NEXUS on the right, and the Canvas in the center. Watch as they take turns adding objects to the painting!
 5. Scroll down to see the **JUDGE** band score the collaboration when the round finishes.
 
+> **Also available:** the top-nav **⧉ Quad Pipeline** button opens the four-agent
+> sequential system (Section 6). During any run, **Stop ↦ / Stop & Judge** ends
+> the agents early and asks JUDGE to score the work completed so far.
+
 ---
 
-## 6. The agents & the RL research layer
+## 6. The Quad-Agent Pipeline (four agents)
+
+Beyond the two-agent ARIA/NEXUS system, CanvasMind includes an isolated
+**Quad-Agent Sequential Pipeline**. Open it with the top-nav **⧉ Quad Pipeline**
+button (single-file app) or the **Switch to Quad-Agent Pipeline** button (React
+frontend).
+
+1. **Configure four agents.** Each of the four cards sets a **Name**, a
+   **Persona preset** (The Vanguard Minimalist · The Neo-Noir Cyberpunk ·
+   The Biomorphic Surrealist · The Baroque Traditionalist · The Kinetic Futurist ·
+   The Luminous Impressionist), an optional **Configure Custom Agent** prompt that
+   overrides the preset, and an **Expertise** level (Beginner / Intermediate /
+   Expert). Set the global **Prompt**, **Style Hints**, and **Rounds** (1–6).
+2. **Launch.** Each round the agents act in strict order (Agent 1 → 2 → 3 → 4),
+   each adding ONE new object to the shared canvas — `Rounds = 2` → **8** additive
+   step images. Watch the **4-panel** live stream (click any turn to expand its
+   reasoning / palette / placement / confidence), the labelled **filmstrip**, and
+   the click-to-expand full brief. **Stop ↦** ends the turns early.
+3. **JUDGE.** When the sequence finishes, JUDGE scores the collaboration across
+   five axes + a composite, with reasoning, highlights and a final summary — just
+   like the two-agent system. **Download all steps** saves every PNG.
+
+An optional **ArtHistoryRAG** enriches each persona prompt with precise stylistic
+keywords when it recognises a movement/technique.
+
+Endpoints: `GET /api/quad/personas`, `POST /api/quad/start`, reusing
+`GET /api/stream/{id}` (SSE) and `POST /api/stop/{id}`. In the modular backend
+they live in `backend/api/routes_quad.py` + `backend/orchestration/quad_orchestrator.py`
+(registered in `main.py`); the React view is `frontend/src/components/quad/`.
+
+---
+
+## 7. Hero artwork
+
+Both home screens show full-bleed artwork with a glowing, breathing, looping
+treatment. Drop the images into the app's `assets/` folder (next to
+`canvasmind_app.py`):
+
+| File | Screen | Served at |
+|------|--------|-----------|
+| `assets/hero.png` | 2-agent *"Two minds. One canvas."* | `/assets/hero` |
+| `assets/4_Agent_Art.png` | Quad *"Four minds, in sequence."* | `/assets/quad-hero` |
+
+Missing images fall back to a dark cosmic gradient automatically. (In the React
+app the quad image is served at `/api/quad/hero-image`.)
+
+---
+
+## 8. The agents & the RL research layer
 
 CanvasMind's painters are **generative agents** (after Park et al., *Generative Agents*, UIST'23) wrapped in an **inference-time reinforcement-learning** layer. On the briefing screen you control two new things:
 
@@ -130,7 +184,7 @@ During a session each agent **remembers** what it and its partner did, **retriev
 
 ---
 
-## 7. Troubleshooting every error
+## 9. Troubleshooting every error
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -140,6 +194,8 @@ During a session each agent **remembers** what it and its partner did, **retriev
 | **Only image #1 appears** | Azure `gpt-image-1` quota limit | The image generation is being rate-limited. Wait a minute; check Azure quota. |
 | **Browser shows blank / 404** | You opened the proxy for port 8000 | You must open the proxy for **3000** (`.../proxy/3000/`) to see the React frontend. |
 | **ModuleNotFoundError: requests** | Backend dependencies missing | Run `pip install -r backend/requirements.txt` in the active virtual environment. |
+| **Hero image doesn't show** | `hero.png` / `4_Agent_Art.png` not in `assets/` | Drop them in the app's `assets/` folder (Section 7); a cosmic gradient is used until then. |
+| **Quad Pipeline falls back to Demo** | Frontend can't reach `/api/quad/*` | Ensure the backend serving `routes_quad` is running and `VITE_BACKEND_URL` points to it (single-file app already includes it). |
 
 ---
 

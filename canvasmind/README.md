@@ -14,7 +14,14 @@ A production-ready desktop application where collaborative AI painting agents (A
 > **Goodhart reward-hacking monitor** — surfaced in a live **Research Dashboard**.
 > Briefing controls set each agent's **expertise** (beginner / intermediate / expert)
 > and the **system autonomy** (human-led to autonomous). Full details:
-> [RUN_ON_VM.md](RUN_ON_VM.md) section 6.
+> [RUN_ON_VM.md](RUN_ON_VM.md) section 8.
+
+> **Quad-Agent Sequential Pipeline (advanced view).** A dedicated, isolated mode
+> (top-nav **⧉ Quad Pipeline**) runs **four** independently-configured persona
+> agents that each add one object in strict sequence — Agent 1 → 2 → 3 → 4 per
+> round — then **JUDGE** scores the collaboration. Pick from 6 preset personas or
+> write a fully custom one per agent, each at beginner / intermediate / expert.
+> See [⧉ Quad-Agent Sequential Pipeline](#-quad-agent-sequential-pipeline) below.
 
 ## Architecture
 
@@ -62,9 +69,14 @@ chmod +x launch.sh     # first time only
 `launch.sh` checks credentials, installs dependencies if needed, and starts
 [`canvasmind_app.py`](canvasmind_app.py). Open the app and choose how to begin:
 
-- **✨ AI Surprise** — click **Surprise Me** and the AI invents a striking brief +
-  style on its own (shown in the UI), then creates.
-- **✍️ Write my own** — type your own brief and click **Start Co-Creation**.
+- **AI Surprise** — the AI invents a striking brief + style on its own, then begins.
+- **Write My Own** — type your own brief and optional style.
+
+…on the cinematic **"Two minds. One canvas."** home screen (full-bleed hero art,
+floating "intelligence" bubbles, rainbow-ring buttons). Set each agent's
+**expertise**, choose the number of **Back-and-Forths**, then click **Begin
+Session →**. During a run, **Stop & Judge ↦** ends the agents early and asks
+JUDGE to score the work completed so far.
 
 Then ARIA and NEXUS paint **one shared canvas, step by step**, taking turns to
 **add a single new object each turn** (additive collaboration, not refinement):
@@ -84,6 +96,57 @@ VM walkthrough.
 > The single-file app calls Azure via raw REST with `max_completion_tokens` (no
 > custom temperature), which is what `gpt-5.2` requires. The terminal-only demo
 > `simulate_chat.py` works the same way.
+
+---
+
+## ⧉ Quad-Agent Sequential Pipeline
+
+An advanced, isolated view that extends the two-agent system with **four**
+independently-configurable persona agents. Open it from the top-nav
+**⧉ Quad Pipeline** button (single-file app) or the **Switch to Quad-Agent
+Pipeline** button (React app).
+
+**Configure — four agent cards + global settings:**
+
+- **Name** · **Persona preset** (6 to choose from — *The Vanguard Minimalist,
+  The Neo-Noir Cyberpunk, The Biomorphic Surrealist, The Baroque Traditionalist,
+  The Kinetic Futurist, The Luminous Impressionist*) · **Configure Custom Agent**
+  (a raw bespoke prompt that overrides the preset) · **Expertise**
+  (Beginner / Intermediate / Expert).
+- Global **Prompt**, **Style Hints**, and **Rounds** (1–6).
+
+**Run:** each round the four agents act in strict order (Agent 1 → 2 → 3 → 4),
+each adding ONE new object on top of the shared canvas — so `Rounds = 2` gives
+**8** additive step images. A live **4-panel** stream shows each agent's turns
+(click a turn to expand its reasoning, palette, placement and confidence), a
+labelled **filmstrip** (`R1 · Agent 2 (The Neo-Noir Cyberpunk): …`), and a
+click-to-expand full brief. **Stop ↦** ends the turns early.
+
+**JUDGE:** when the sequence finishes, JUDGE scores the collaboration (5 axes +
+composite, with reasoning, highlights and a final summary) exactly like the
+two-agent system, and **Download all steps** saves every PNG.
+
+An optional **ArtHistoryRAG** enriches each persona's prompt with precise
+stylistic keywords when it detects a known movement/technique.
+
+Endpoints: `GET /api/quad/personas`, `POST /api/quad/start`
+(`{prompt, style, rounds, images, agents:[{name, persona, custom_prompt, expertise}]}`),
+reusing `GET /api/stream/{id}` (SSE) and `POST /api/stop/{id}`. In the modular
+stack these are registered under the same paths (`backend/api/routes_quad.py` +
+`backend/orchestration/quad_orchestrator.py`).
+
+## Hero artwork
+
+The cinematic home screens display full-bleed artwork with a glowing, breathing,
+looping treatment. Drop your images into the app's `assets/` folder (next to
+`canvasmind_app.py`):
+
+| File | Where it appears | Served at |
+|------|------------------|-----------|
+| `assets/hero.png` | 2-agent **"Two minds. One canvas."** home screen | `/assets/hero` |
+| `assets/4_Agent_Art.png` | **Quad** config screen (*"Four minds, in sequence."*) | `/assets/quad-hero` |
+
+If an image is absent, a dark cosmic gradient stands in automatically.
 
 ---
 
@@ -232,6 +295,22 @@ GET    /api/sessions/{id}/export/canvas
 WS     /ws/{session_id}           Real-time events
 GET    /health                    Health check
 GET    /health/azure              Azure connectivity test
+```
+
+The **single-file app** (`canvasmind_app.py`) and the **Quad pipeline** serve
+their own API (Server-Sent Events, one origin — proxy-safe):
+
+```
+GET    /                          Cinematic web UI (Two minds / Four minds)
+GET    /api/health                Model / images / embeddings status
+GET    /api/inspire               AI-invented brief + style
+POST   /api/start                 Start 2-agent co-creation (SSE)
+GET    /api/stream/{id}           Server-Sent Events stream
+POST   /api/stop/{id}             Stop early → JUDGE scores progress so far
+GET    /api/quad/personas         6 persona presets + expertise levels
+POST   /api/quad/start            Launch a 4-agent sequential session
+GET    /assets/hero               2-agent home hero (assets/hero.png)
+GET    /assets/quad-hero          Quad config hero (assets/4_Agent_Art.png)
 ```
 
 ---
