@@ -1117,7 +1117,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
   /* ---------- dreamy / divine hero title ---------- */
   .cm-title{font-family:'Cormorant Garamond',Georgia,serif;font-weight:500;font-style:italic;
-    font-size:clamp(52px,12vw,168px);line-height:0.9;letter-spacing:-0.01em;margin-bottom:32px;
+    font-size:clamp(44px,9vw,120px);line-height:0.9;letter-spacing:-0.01em;margin-bottom:18px;
     background:linear-gradient(100deg,#ffd1e8,#c9b8ff,#a8e0ff,#bdf7d6,#ffe6a8,#ffb3d9,#ffd1e8);
     background-size:300% 100%;-webkit-background-clip:text;background-clip:text;
     color:transparent;-webkit-text-fill-color:transparent;
@@ -1194,64 +1194,63 @@ INDEX_HTML = r"""<!DOCTYPE html>
   </nav>
 
   <!-- ============ BRIEFING ============ -->
-  <section id="briefing" style="min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:120px 40px 80px;max-width:1280px;margin:0 auto">
-    <p style="font-size:11px;font-weight:400;letter-spacing:0.32em;text-transform:uppercase;color:#9a9a9a;margin-bottom:30px">Co-Creation Engine · Two Agents · One Canvas</p>
+  <section id="briefing" style="min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:100px 44px 56px">
+    <p style="font-size:11px;font-weight:400;letter-spacing:0.32em;text-transform:uppercase;color:#9a9a9a;margin-bottom:14px">Co-Creation Engine · Two Agents · One Canvas</p>
     <h1 class="cm-title">Two minds.<br>One canvas.</h1>
-    <p style="font-size:18px;font-weight:400;line-height:1.5;color:#cdcdcd;max-width:560px;margin-bottom:56px">ARIA and NEXUS paint together, one object at a time — each turn reading what the other left behind.</p>
+    <p style="font-size:15px;font-weight:400;line-height:1.5;color:#cdcdcd;max-width:560px;margin-bottom:22px">ARIA and NEXUS paint together, one object at a time — each turn reading what the other left behind.</p>
 
-    <div class="briefGrid" style="border-top:1px solid rgba(255,255,255,0.16);padding-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:56px;max-width:960px">
-      <!-- left: mode + expertise -->
-      <div>
-        <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8d8d8d;margin-bottom:18px">01 · The Brief</p>
-        <div class="modeRow" style="display:flex;gap:14px;margin-bottom:26px">
-          <span class="glowwrap" style="flex:1"><button id="btnSurprise" style="border-radius:75px;padding:11px 18px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:1px solid rgba(255,255,255,0.28);background:#fff;color:#000;transition:all .3s">AI Surprise</button></span>
-          <span class="glowwrap" style="flex:1"><button id="btnManual" style="border-radius:75px;padding:11px 18px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:1px solid rgba(255,255,255,0.28);background:#0e0e16;color:#fff;transition:all .3s">Write My Own</button></span>
-        </div>
+    <!-- compact, full-width horizontal control bar (spread end-to-end) -->
+    <div class="briefBar" style="border-top:1px solid rgba(255,255,255,0.16);padding-top:22px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:18px 28px;width:100%">
 
-        <div id="manualFields" style="display:none;flex-direction:column;gap:14px">
-          <textarea id="brief" rows="2" placeholder="Describe the painting to begin…" style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#fff;font-size:18px;font-weight:300;line-height:1.4;padding:0 0 12px;resize:none;outline:none"></textarea>
-          <input id="style" placeholder="Style — e.g. deep-baroque, mineral light" style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#cdcdcd;font-size:14px;font-weight:400;letter-spacing:0.02em;padding:0 0 10px;outline:none">
-        </div>
-        <p id="surpriseText" style="font-size:15px;font-weight:400;line-height:1.5;color:#9a9a9a">An unexpected brief and style, invented on the spot — the agents discover the subject the moment they begin.</p>
-
-        <!-- expertise (generative-agent levels) -->
-        <div style="margin-top:34px">
-          <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8d8d8d;margin-bottom:16px">Agent Expertise</p>
-          <div class="expertiseRow" style="display:flex;gap:36px;flex-wrap:wrap">
-            <label style="display:flex;flex-direction:column;gap:9px">
-              <span class="cm-field-label">ARIA · Creative Director</span>
-              <select id="ariaLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
-            </label>
-            <label style="display:flex;flex-direction:column;gap:9px">
-              <span class="cm-field-label">NEXUS · Creative Challenger</span>
-              <select id="nexusLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
-            </label>
-          </div>
+      <!-- brief mode -->
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">01 · Brief</span>
+        <div class="modeRow" style="display:flex;gap:8px">
+          <button id="btnSurprise" style="border-radius:75px;padding:9px 15px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:1px solid rgba(255,255,255,0.28);background:#fff;color:#000;transition:all .3s">AI Surprise</button>
+          <button id="btnManual" style="border-radius:75px;padding:9px 15px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:1px solid rgba(255,255,255,0.28);background:#0e0e16;color:#fff;transition:all .3s">Write My Own</button>
         </div>
       </div>
 
-      <!-- right: rounds + begin -->
-      <div>
-        <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8d8d8d;margin-bottom:18px">02 · Back-and-Forths</p>
-        <div style="display:flex;align-items:center;gap:24px;margin-bottom:14px">
-          <button id="roundsDown" style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:20px;font-weight:300;cursor:pointer;line-height:1">−</button>
-          <span id="roundsVal" style="font-size:78px;font-weight:300;line-height:1;color:#fff;min-width:90px;text-align:center;letter-spacing:-0.02em">5</span>
-          <button id="roundsUp" style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:20px;font-weight:300;cursor:pointer;line-height:1">+</button>
+      <!-- subject (grows to fill the row) -->
+      <div style="flex:1 1 240px;min-width:200px;display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">Subject</span>
+        <div id="manualFields" style="display:none;gap:12px;align-items:center">
+          <input id="brief" placeholder="Describe the painting to begin…" style="flex:1;min-width:130px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#fff;font-size:15px;font-weight:300;padding:0 0 8px;outline:none">
+          <input id="style" placeholder="Style — mineral light" style="width:150px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#cdcdcd;font-size:13px;padding:0 0 8px;outline:none">
         </div>
-        <p style="font-size:13px;letter-spacing:0.04em;color:#9a9a9a;margin-bottom:30px"><span id="roundsVal2">5</span> rounds → <span id="totalTurns" style="color:#fff">10</span> turns · <span id="totalTurns2">10</span> images presented</p>
-
-        <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8d8d8d;margin-bottom:14px">03 · System Autonomy</p>
-        <label style="display:flex;flex-direction:column;gap:9px;max-width:260px;margin-bottom:40px">
-          <span class="cm-field-label">Who decides the threshold</span>
-          <select id="autonomy" class="cm-select">
-            <option value="1" selected>Autonomous — agents decide</option>
-            <option value="0.5">Shared — human + agents</option>
-            <option value="0">Human-led — you direct</option>
-          </select>
-        </label>
-
-        <span class="glowwrap"><button id="btnBegin" style="background:#fff;color:#000;border:none;border-radius:75px;padding:16px 40px;font-size:13px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;transition:opacity .3s">Begin Session →</button></span>
+        <p id="surpriseText" style="font-size:13px;font-weight:400;line-height:1.45;color:#9a9a9a;margin:0">An unexpected brief and style, invented on the spot — the agents discover the subject as they begin.</p>
       </div>
+
+      <!-- ARIA expertise -->
+      <label style="display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">ARIA</span>
+        <select id="ariaLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
+      </label>
+      <!-- NEXUS expertise -->
+      <label style="display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">NEXUS</span>
+        <select id="nexusLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
+      </label>
+
+      <!-- rounds -->
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">Rounds · <span id="totalTurns">10</span> turns</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button id="roundsDown" style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:16px;font-weight:300;cursor:pointer;line-height:1">−</button>
+          <span id="roundsVal" style="font-size:30px;font-weight:300;line-height:1;color:#fff;min-width:34px;text-align:center;letter-spacing:-0.02em">5</span>
+          <button id="roundsUp" style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:16px;font-weight:300;cursor:pointer;line-height:1">+</button>
+        </div>
+        <span style="display:none"><span id="roundsVal2">5</span><span id="totalTurns2">10</span></span>
+      </div>
+
+      <!-- autonomy -->
+      <label style="display:flex;flex-direction:column;gap:9px">
+        <span class="cm-field-label">Autonomy</span>
+        <select id="autonomy" class="cm-select"><option value="1" selected>Autonomous</option><option value="0.5">Shared</option><option value="0">Human-led</option></select>
+      </label>
+
+      <!-- begin -->
+      <span class="glowwrap"><button id="btnBegin" style="background:#fff;color:#000;border:none;border-radius:75px;padding:13px 30px;font-size:12px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;transition:opacity .3s">Begin →</button></span>
     </div>
 
     <div class="ring-deco" style="position:fixed;bottom:34px;left:40px;width:92px;height:92px;animation:spin 22s linear infinite;z-index:2">
@@ -1265,17 +1264,17 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
   <!-- ============ STAGE ============ -->
   <section id="stage" style="display:none;min-height:100vh;padding:84px 40px 40px">
-    <!-- brief bar -->
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.12);padding-bottom:22px;margin-bottom:30px;gap:30px;flex-wrap:wrap">
-      <div style="max-width:680px">
-        <p style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#6d6d6d;margin-bottom:10px">Brief</p>
-        <h2 id="stageBrief" style="font-size:clamp(26px,3.4vw,45px);font-weight:300;line-height:1.08;letter-spacing:-0.01em;color:#fff"></h2>
-        <p id="stageStyle" style="font-size:13px;letter-spacing:0.06em;color:#9a9a9a;margin-top:12px;text-transform:uppercase"></p>
+    <!-- brief bar (full-width) -->
+    <div style="border-bottom:1px solid rgba(255,255,255,0.12);padding-bottom:24px;margin-bottom:30px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:14px">
+        <p style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#6d6d6d">Brief</p>
+        <div style="text-align:right">
+          <p id="turnLabel" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6d6d6d;margin-bottom:2px">Turn</p>
+          <p id="turnCounter" style="font-size:34px;font-weight:300;line-height:1;color:#fff;letter-spacing:-0.02em">00 / 10</p>
+        </div>
       </div>
-      <div style="text-align:right">
-        <p id="turnLabel" style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6d6d6d;margin-bottom:6px">Turn</p>
-        <p id="turnCounter" style="font-size:54px;font-weight:300;line-height:1;color:#fff;letter-spacing:-0.02em">00 / 10</p>
-      </div>
+      <h2 id="stageBrief" title="Click to view the full prompt" style="cursor:pointer;width:100%;font-size:clamp(18px,2.8vw,34px);font-weight:300;line-height:1.2;letter-spacing:-0.01em;color:#fff;transition:opacity .2s"></h2>
+      <p id="stageStyle" style="font-size:13px;letter-spacing:0.06em;color:#9a9a9a;margin-top:14px;text-transform:uppercase"></p>
     </div>
 
     <!-- 3 column grid -->
@@ -1370,12 +1369,43 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
 </div>
 
+<!-- ============ FULL-PROMPT MEMO POPUP ============ -->
+<div id="briefModal" style="display:none;position:fixed;inset:0;z-index:200;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.74);backdrop-filter:blur(7px)">
+  <div style="position:relative;max-width:740px;width:100%;max-height:82vh;overflow-y:auto;background:#0b0b12;border:1px solid rgba(255,255,255,0.16);border-left:2px solid rgba(255,255,255,0.7);border-radius:5px;padding:42px 46px 40px;box-shadow:0 30px 100px rgba(0,0,0,0.65);animation:fadeUp .3s ease both">
+    <button id="briefModalClose" style="position:absolute;top:16px;right:18px;background:transparent;border:none;color:#9a9a9a;font-size:24px;line-height:1;cursor:pointer">×</button>
+    <p style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#6d6d6d;margin-bottom:18px">The Brief · Full Prompt</p>
+    <p id="briefModalText" style="font-size:22px;font-weight:300;line-height:1.45;color:#fff;letter-spacing:-0.01em"></p>
+    <p id="briefModalStyle" style="font-size:13px;letter-spacing:0.06em;color:#9a9a9a;margin-top:22px;text-transform:uppercase"></p>
+  </div>
+</div>
+
 <script>
 (function(){
 "use strict";
 var $ = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function cap(s){ s=String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
+
+// ---------- brief: clamp to <=3 sentences (…) + full-prompt memo ----------
+function firstSentences(text, max){
+  text = String(text==null?'':text).trim();
+  if(!text) return '';
+  var parts = text.match(/[^.!?]+[.!?]+(\s|$)|\S[^.!?]*$/g);
+  if(!parts || parts.length <= max) return text;
+  return parts.slice(0, max).join(' ').replace(/\s+/g,' ').trim() + ' …';
+}
+function setStageBrief(text){
+  state.brief = (text==null ? '' : String(text));
+  var el = $('stageBrief'); if(!el) return;
+  el.textContent = firstSentences(state.brief, 3);
+  el.title = 'Click to view the full prompt';
+}
+function openBriefModal(){
+  $('briefModalText').textContent = state.brief || '—';
+  $('briefModalStyle').textContent = state.style ? ('Style · ' + state.style) : '';
+  $('briefModal').style.display = 'flex';
+}
+function closeBriefModal(){ $('briefModal').style.display = 'none'; }
 
 var SCORE_KEYS = ['compositional_coherence','style_fidelity','emotional_resonance','originality','collaboration_quality'];
 var SCORE_LABELS = {
@@ -1469,14 +1499,25 @@ function addAgentCard(d){
   var m = d.message || {};
   var n = d.turn, palette = m.palette || '', conf = (m.confidence_score!=null)?m.confidence_score:0.8;
   var retrieved = d.retrieved || [];
+  var rl = d.rl;
   var align = right ? 'text-align:right;border-right:1px solid rgba(255,255,255,0.18);padding-right:16px;'
                     : 'border-left:1px solid rgba(255,255,255,0.18);padding-left:16px;';
   var paletteText = Array.isArray(palette) ? palette.join(' · ') : palette;
+  var edit = esc(d.object || m.new_object || 'a new element');
+
+  // ---- minimal summary: only the edit made (always visible, clean) ----
+  var caret = '<span class="cm-caret" style="font-size:10px;color:#6d6d6d;transition:transform .3s;flex:0 0 auto">▸</span>';
+  var summary = '<div class="cm-summary" style="cursor:pointer;display:flex;align-items:baseline;gap:10px;'
+      + (right ? 'flex-direction:row-reverse;' : '') + '">'
+      + '<span style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#4a4a4a;flex:0 0 auto">T'+esc(n)+'</span>'
+      + '<span style="flex:1;min-width:0;font-size:16px;font-weight:300;line-height:1.3;color:#fff">＋ '+edit+'</span>'
+      + caret + '</div>';
+
+  // ---- full details: everything, hidden until the card is clicked ----
   var recallHtml = retrieved.length
     ? '<p style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#4a4a4a;margin-top:12px;margin-bottom:4px">Recalled</p>'
       + '<p style="font-size:11px;line-height:1.45;color:#6d6d6d">'+ retrieved.map(esc).join(' · ') +'</p>'
     : '';
-  var rl = d.rl;
   var rlHtml = '';
   if(rl){
     var rejTxt = (rl.rejected && rl.rejected.length)
@@ -1488,11 +1529,9 @@ function addAgentCard(d){
         + ' · empowerment '+(rl.empowerment!=null?Number(rl.empowerment).toFixed(2):'—')
         + (rl.resisted_human?' · resisted human':'')+rejTxt+'</p>';
   }
-  var html = '<div style="'+align+'animation:fadeUp .6s ease both">'
-    + '<p style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#4a4a4a;margin-bottom:6px">Turn '+esc(n)+' · sees</p>'
-    + '<p style="font-size:13px;line-height:1.45;color:#9a9a9a;margin-bottom:14px">'+esc(m.sees_on_canvas||'—')+'</p>'
-    + '<p style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#4a4a4a;margin-bottom:6px">adds</p>'
-    + '<p style="font-size:18px;font-weight:300;line-height:1.3;color:#fff;margin-bottom:12px">'+esc(d.object||m.new_object||'a new element')+'</p>'
+  var details = '<div class="cm-details" style="display:none;margin-top:12px;animation:fadeUp .3s ease both">'
+    + '<p style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#4a4a4a;margin-bottom:6px">Sees</p>'
+    + '<p style="font-size:13px;line-height:1.45;color:#9a9a9a;margin-bottom:12px">'+esc(m.sees_on_canvas||'—')+'</p>'
     + (m.where ? '<p style="font-size:12px;line-height:1.4;color:#6d6d6d;margin-bottom:4px">'+esc(m.where)+'</p>' : '')
     + (paletteText ? '<p style="font-size:11px;letter-spacing:0.06em;color:#6d6d6d;margin-bottom:12px">Palette · '+esc(paletteText)+'</p>' : '')
     + (m.reasoning ? '<p style="font-size:12px;line-height:1.45;color:#6d6d6d;margin-bottom:12px">'+esc(m.reasoning)+'</p>' : '')
@@ -1500,9 +1539,18 @@ function addAgentCard(d){
     + recallHtml
     + rlHtml
     + '</div>';
-  var div = document.createElement('div');
-  div.innerHTML = html;
-  (right ? $('nexusFeed') : $('ariaFeed')).appendChild(div.firstChild);
+
+  var card = document.createElement('div');
+  card.style.cssText = align + 'animation:fadeUp .6s ease both';
+  card.innerHTML = summary + details;
+  var det = card.querySelector('.cm-details');
+  var car = card.querySelector('.cm-caret');
+  card.querySelector('.cm-summary').onclick = function(){
+    var open = det.style.display === 'block';
+    det.style.display = open ? 'none' : 'block';
+    if(car){ car.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)'; }
+  };
+  (right ? $('nexusFeed') : $('ariaFeed')).appendChild(card);
 }
 function addReflection(d){
   var right = (d.agent === 'NEXUS');
@@ -1716,7 +1764,7 @@ function handle(type, d){
       if(d.rounds){ state.totalTurns = d.rounds*2; }
       else if(d.total_turns){ state.totalTurns = d.total_turns; }
       state.imagesEnabled = !!d.images;
-      $('stageBrief').textContent = state.brief;
+      setStageBrief(state.brief);
       $('stageStyle').textContent = state.style;
       $('ariaLevelLabel').textContent = cap(state.levels.ARIA || '');
       $('nexusLevelLabel').textContent = cap(state.levels.NEXUS || '');
@@ -1857,7 +1905,7 @@ function connectLive(){
     fetch('api/inspire').then(function(r){ return r.json(); }).then(function(j){
       if(j.error){ throw new Error(j.error); }
       state.brief = j.prompt || ''; state.style = j.style || '';
-      $('stageBrief').textContent = state.brief; $('stageStyle').textContent = state.style;
+      setStageBrief(state.brief); $('stageStyle').textContent = state.style;
       addLog('inspire', 'brief invented · '+state.brief);
       startWith(state.brief, state.style);
     }).catch(function(err){
@@ -1865,7 +1913,7 @@ function connectLive(){
       state.live=false; setStatus(); at(400, runDemo);
     });
   } else {
-    $('stageBrief').textContent = state.brief || 'Untitled collaboration';
+    setStageBrief(state.brief || 'Untitled collaboration');
     $('stageStyle').textContent = state.style || 'open, intuitive';
     startWith(state.brief || 'Untitled collaboration', state.style || 'open, intuitive');
   }
@@ -1971,6 +2019,10 @@ $('newSessionBtn').onclick = resetSession;
 $('stopBtn').onclick = stopRun;
 $('downloadBtn').onclick = downloadAll;
 $('viewLatest').onclick = viewLatest;
+$('stageBrief').onclick = openBriefModal;
+$('briefModalClose').onclick = closeBriefModal;
+$('briefModal').onclick = function(e){ if(e.target === $('briefModal')){ closeBriefModal(); } };
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closeBriefModal(); } });
 
 // ---------- init ----------
 function init(){
