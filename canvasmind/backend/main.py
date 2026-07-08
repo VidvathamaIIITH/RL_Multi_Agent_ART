@@ -10,6 +10,7 @@ from api.routes_session import router as session_router
 from api.routes_control import router as control_router
 from api.routes_export import router as export_router
 from api.routes_health import router as health_router
+from api.routes_quad import router as quad_router
 from middleware.logging_middleware import LoggingMiddleware
 from middleware.error_handlers import register_error_handlers
 from websocket.ws_manager import ws_manager
@@ -43,6 +44,7 @@ app.include_router(health_router)
 app.include_router(session_router)
 app.include_router(control_router)
 app.include_router(export_router)
+app.include_router(quad_router)
 
 
 @app.websocket("/ws/{session_id}")

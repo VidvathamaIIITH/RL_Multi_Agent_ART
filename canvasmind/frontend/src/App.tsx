@@ -7,6 +7,9 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useSessionStore } from './store/useSessionStore'
 import { useUIStore } from './store/useUIStore'
+import { useQuadStore } from './store/useQuadStore'
+import { QuadConfigDashboard } from './components/quad/QuadConfigDashboard'
+import { QuadLiveView } from './components/quad/QuadLiveView'
 import { apiService } from './services/api.service'
 import './styles/globals.css'
 import './styles/animations.css'
@@ -18,6 +21,8 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const { openLoadSessionModal } = useUIStore()
   const { setBackendHealthy, setAzureConnected } = useUIStore()
+  const quadView = useQuadStore((s) => s.view)
+  const openQuad = useQuadStore((s) => s.setView)
 
   // WebSocket connects when a session is active
   useWebSocket(activeSessionId)
@@ -56,8 +61,24 @@ export default function App() {
     setActiveSessionId(null)
   }
 
+  if (quadView === 'config') return <QuadConfigDashboard />
+  if (quadView === 'live') return <QuadLiveView />
+
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {view === 'prompt' && (
+        <button
+          onClick={() => openQuad('config')}
+          style={{
+            position: 'fixed', top: 16, right: 16, zIndex: 60,
+            border: '1px solid rgba(255,255,255,0.4)', background: 'rgba(0,0,0,0.45)', color: '#fff',
+            borderRadius: 75, padding: '8px 16px', fontSize: 11, letterSpacing: '0.14em',
+            textTransform: 'uppercase', cursor: 'pointer',
+          }}
+        >
+          ⧉ Switch to Quad-Agent Pipeline
+        </button>
+      )}
       {view === 'session' && (
         <TopBar onHome={handleHome} onLoadSession={openLoadSessionModal} />
       )}

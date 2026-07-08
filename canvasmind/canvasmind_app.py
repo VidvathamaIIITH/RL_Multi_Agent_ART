@@ -936,6 +936,287 @@ class Session:
 
 
 # ===========================================================================
+#  QUAD-AGENT SEQUENTIAL PIPELINE  (advanced view — isolated from ARIA/NEXUS)
+# ===========================================================================
+# Four independently-configurable persona agents each add one object, in strict
+# sequence, per round. No JUDGE — pure additive co-creation. Reuses the same
+# Azure REST calls, the SESSIONS registry, the /api/stream SSE and /api/stop.
+
+QUAD_PERSONAS: Dict[str, Dict[str, Any]] = {
+    "vanguard_minimalist": {
+        "name": "The Vanguard Minimalist",
+        "blurb": "Negative space, geometric simplicity, raw restraint.",
+        "identity": ("a Vanguard Minimalist: you revere negative space, geometric clarity and raw restraint; you add "
+                     "the fewest, most deliberate marks; you strip away rather than embellish and trust emptiness to "
+                     "carry meaning."),
+        "image_style": "stark minimalist composition, vast negative space, precise geometry, muted monochrome palette",
+        "keywords": ["minimalism", "negative space", "geometric", "bauhaus"],
+    },
+    "neo_noir_cyberpunk": {
+        "name": "The Neo-Noir Cyberpunk",
+        "blurb": "High-contrast neon, rainy streets, dystopian industry.",
+        "identity": ("a Neo-Noir Cyberpunk: you are obsessed with high-contrast neon, rain-slicked streetscapes, "
+                     "holographic signage and dystopian industrial texture; you add glowing, gritty, electric elements."),
+        "image_style": "neo-noir cyberpunk, high-contrast neon glow, rain reflections, wet asphalt, dystopian industrial detail",
+        "keywords": ["cyberpunk", "neon", "noir", "glitch"],
+    },
+    "biomorphic_surrealist": {
+        "name": "The Biomorphic Surrealist",
+        "blurb": "Organic, fluid, dream-like, uncanny melting forms.",
+        "identity": ("a Biomorphic Surrealist: you introduce organic, fluid, dream-like elements and uncanny melting "
+                     "structures; your additions feel grown rather than built, unsettling and strangely alive."),
+        "image_style": "biomorphic surrealism, fluid organic melting forms, dreamlike uncanny detail, soft iridescence",
+        "keywords": ["surrealism", "biomorphic", "organic", "dreamlike"],
+    },
+    "baroque_traditionalist": {
+        "name": "The Baroque Traditionalist",
+        "blurb": "Deep chiaroscuro, classical symmetry, ornate gold.",
+        "identity": ("a Baroque Traditionalist: you demand deep chiaroscuro, classical symmetry, ornate gold detailing "
+                     "and dramatic directional lighting; your additions are richly modelled and theatrically lit."),
+        "image_style": "baroque oil painting, deep chiaroscuro, dramatic single-source light, ornate gilded detail, classical symmetry",
+        "keywords": ["baroque", "chiaroscuro", "classical", "gold"],
+    },
+    "kinetic_futurist": {
+        "name": "The Kinetic Futurist",
+        "blurb": "Motion vectors, speed lines, fractured energy.",
+        "identity": ("a Kinetic Futurist: you emphasise sharp motion vectors, speed lines, chaotic energy and fractured "
+                     "perspectives; your additions imply violent movement and dynamism frozen mid-flight."),
+        "image_style": "futurist dynamism, sharp motion vectors, speed lines, fractured multi-perspective, energetic diagonals",
+        "keywords": ["futurism", "kinetic", "motion", "fractured"],
+    },
+    "luminous_impressionist": {
+        "name": "The Luminous Impressionist",
+        "blurb": "Broken colour, shimmering light, soft atmosphere.",
+        "identity": ("a Luminous Impressionist: you build with broken colour and shimmering light; you add soft "
+                     "atmospheric passages of dappled, vibrating hue that dissolve hard edges into air."),
+        "image_style": "impressionist broken colour, dappled shimmering light, soft atmospheric edges, plein-air luminosity",
+        "keywords": ["impressionism", "broken colour", "light", "atmosphere"],
+    },
+}
+
+
+def quad_expertise_modifier(level: str) -> str:
+    level = level if level in EXPERTISE_LEVELS else "intermediate"
+    if level == "beginner":
+        return ("Expertise: BEGINNER. Use plain, concrete vocabulary and very few technical terms. Be modest and "
+                "cautious; add ONE simple, clearly-named object. Adhere closely and literally to the brief.")
+    if level == "expert":
+        return ("Expertise: EXPERT. Use rich art-historical vocabulary and precise technique. Be boldly assertive and "
+                "inventive; you may reinterpret the brief to deepen it. Add a sophisticated, masterfully-conceived element.")
+    return ("Expertise: INTERMEDIATE. Use clear language with some art terminology. Make a confident, coherent addition "
+            "that balances fidelity to the brief with a personal creative choice.")
+
+
+class ArtHistoryRAG:
+    """Lean keyword-matching context router (no external vector store). When an
+    agent's persona/brief mentions a known style or technique, it injects precise
+    stylistic keywords to enrich the prompt. The interface mirrors a retriever so
+    it can later be swapped for a true embedding vector store."""
+
+    KB: Dict[str, str] = {
+        "chiaroscuro": "strong light-dark modelling, a single dramatic light source, deep velvety shadow",
+        "baroque": "theatrical movement, ornate gilded ornament, rich tenebrism, classical grandeur",
+        "surrealism": "dream logic, impossible juxtapositions, uncanny scale, melting organic form",
+        "biomorphic": "curved organic contours, cell-like structures, forms that appear grown not built",
+        "cyberpunk": "neon signage, holographic haze, rain-wet reflection, dense industrial decay",
+        "neon": "saturated emissive colour, glowing rim light, bloom and reflection on wet surfaces",
+        "noir": "hard shadows, low-key lighting, silhouetted figures, moody high contrast",
+        "minimalism": "extreme reduction, generous negative space, precise geometry, restrained palette",
+        "bauhaus": "primary colours, clean geometry, functional balance, sans-serif rigor",
+        "futurism": "dynamic diagonals, motion blur, repeated forms implying speed, fractured planes",
+        "impressionism": "broken brushwork, dappled light, vibrating complementary colour, soft edges",
+        "ukiyo-e": "flat colour planes, bold contour lines, woodblock texture, asymmetric composition",
+        "art nouveau": "sinuous whiplash curves, botanical motifs, decorative linear rhythm",
+        "brutalism": "raw concrete mass, monolithic geometry, stark shadow, heavy monumental weight",
+        "vaporwave": "pastel neon gradients, retro-digital glitch, marble-and-chrome kitsch",
+        "gothic": "pointed arches, spectral gloom, intricate tracery, vertical aspiration",
+    }
+
+    def enrich(self, text: str, max_hits: int = 3) -> str:
+        low = (text or "").lower()
+        hits: List[str] = []
+        for key, val in self.KB.items():
+            if key in low and val not in hits:
+                hits.append(val)
+            if len(hits) >= max_hits:
+                break
+        return "; ".join(hits)
+
+
+class QuadSession:
+    """Sequential 4-agent additive orchestrator. Compatible with the SESSIONS
+    registry, /api/stream (SSE) and /api/stop, exactly like Session."""
+
+    def __init__(self, prompt: str, style: str, make_images: bool, rounds: int,
+                 agents: List[Dict[str, Any]]):
+        self.id = uuid.uuid4().hex
+        self.prompt = prompt
+        self.style = style
+        self.rounds = max(1, min(int(rounds), 6))
+        self.make_images = make_images and bool(AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1)
+        self.agents = (list(agents) + [{}, {}, {}, {}])[:4]
+        self.rag = ArtHistoryRAG()
+        self.stopped = False
+        self.events: "queue.Queue[Dict[str, Any]]" = queue.Queue()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def emit(self, e: Dict[str, Any]) -> None:
+        self.events.put(e)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _identity(self, cfg: Dict[str, Any]) -> Dict[str, str]:
+        custom = (cfg.get("custom_prompt") or "").strip()
+        if custom:
+            return {"identity": custom, "persona_name": (cfg.get("name") or "Custom Agent"),
+                    "image_style": "in the artist's own described style",
+                    "enrich": self.rag.enrich(custom + " " + self.style)}
+        p = QUAD_PERSONAS.get(cfg.get("persona") or "") or list(QUAD_PERSONAS.values())[0]
+        return {"identity": p["identity"], "persona_name": p["name"], "image_style": p["image_style"],
+                "enrich": self.rag.enrich(" ".join([p["identity"]] + p.get("keywords", []) + [self.style]))}
+
+    def _agent_turn(self, cfg, idx, ident, canvas_objects, transcript, is_first) -> Dict[str, Any]:
+        name = cfg.get("name") or f"Agent {idx+1}"
+        system = (f"You are {name}, {ident['identity']} {quad_expertise_modifier(cfg.get('expertise'))} "
+                  f"You collaborate on ONE shared canvas, adding a single new object per turn and preserving all "
+                  f"existing work.")
+        enrich = ("\nStylistic keywords to honour: " + ident["enrich"]) if ident["enrich"] else ""
+        if is_first:
+            task = ("The shared canvas is BLANK. Choose ONE strong primary element to BEGIN the painting, expressed "
+                    "through your persona. Put it in 'new_object'.")
+        else:
+            task = (f"The shared canvas already contains: {canvas_objects}. Look at what the previous agents added and "
+                    f"ADD exactly ONE NEW, DISTINCT element that both complements the whole AND expresses your persona. "
+                    f"Do NOT restyle or repeat existing elements.")
+        schema = ('Return ONLY valid JSON: {"sender":"' + name + '","sees_on_canvas":"<what is already painted>",'
+                  '"new_object":"<the SINGLE new object you add>","where":"<placement>","palette":["#hex"],'
+                  '"reasoning":"<why this fits your persona and the whole>","confidence_score":0.0}')
+        convo = ("\n\nCollaboration so far:\n" + "\n".join(transcript[-8:])) if transcript else ""
+        user = (f"Shared brief: {self.prompt}\nStyle: {self.style or 'cohesive painterly'}{enrich}{convo}\n\n"
+                f"Task: {task}\nStay fully in character. {schema}")
+        raw = azure_chat_completion([{"role": "system", "content": system}, {"role": "user", "content": user}])
+        try:
+            data = extract_json_object(raw)
+        except Exception:
+            data = {"sender": name, "sees_on_canvas": canvas_objects or "blank canvas",
+                    "new_object": (raw[:80] or "a new element"), "where": "the canvas",
+                    "palette": [], "reasoning": raw[:300], "confidence_score": 0.7}
+        data["sender"] = name
+        return data
+
+    def _run_critic(self, canvas_objects: str, transcript: List[str]) -> Dict[str, Any]:
+        system = ("You are JUDGE, a rigorous art critic. You do NOT edit the painting. You assess how well the four "
+                  "agents collaborated in strict sequence, each building on the last, and summarise the result.")
+        schema = ('Return ONLY JSON: {"scores":{"compositional_coherence":0.0,"style_fidelity":0.0,'
+                  '"emotional_resonance":0.0,"originality":0.0,"collaboration_quality":0.0,"composite":0.0},'
+                  '"reasoning":"...","highlights":["..."],"final_summary":"..."}')
+        user = (f"Brief: {self.prompt}\nStyle: {self.style or 'cohesive painterly'}\n"
+                f"Everything the four agents added to the single shared canvas, in order:\n" + "\n".join(transcript) +
+                f"\n\nThe finished canvas contains: {canvas_objects}\nScore strictly 0-10; judge the SEQUENTIAL "
+                f"COLLABORATION too. {schema}")
+        raw = azure_chat_completion([{"role": "system", "content": system}, {"role": "user", "content": user}])
+        try:
+            return extract_json_object(raw)
+        except Exception:
+            return {"scores": {"compositional_coherence": 7, "style_fidelity": 7, "emotional_resonance": 7,
+                    "originality": 7, "collaboration_quality": 7, "composite": 7.0},
+                    "reasoning": raw[:500], "highlights": [], "final_summary": "A sequential collaborative artwork."}
+
+    def _run(self) -> None:
+        start = time.time()
+        transcript: List[str] = []
+        added: List[str] = []
+        current_b64: Optional[str] = None
+        turn = 0
+        total = self.rounds * 4
+        idents = [self._identity(c) for c in self.agents]
+
+        self.emit({"type": "session", "mode": "quad", "prompt": self.prompt, "style": self.style,
+                   "model": AZURE_OPENAI_DEPLOYMENT_GPTTEXT52, "images": self.make_images,
+                   "rounds": self.rounds, "total_turns": total,
+                   "agents": [{"index": i, "name": (self.agents[i].get("name") or f"Agent {i+1}"),
+                               "persona_name": idents[i]["persona_name"],
+                               "expertise": (self.agents[i].get("expertise") or "intermediate"),
+                               "custom": bool((self.agents[i].get("custom_prompt") or "").strip())}
+                              for i in range(4)]})
+        stopped_early = False
+        try:
+            for rnd in range(1, self.rounds + 1):
+                for idx in range(4):
+                    if self.stopped:
+                        stopped_early = True
+                        break
+                    cfg = self.agents[idx]
+                    ident = idents[idx]
+                    name = cfg.get("name") or f"Agent {idx+1}"
+                    turn += 1
+                    is_first = (current_b64 is None and not added)
+                    canvas_objects = ", ".join(added) if added else "blank canvas"
+                    self.emit({"type": "turn", "turn": turn, "total": total, "round": rnd,
+                               "agent_idx": idx, "name": name, "persona_name": ident["persona_name"],
+                               "expertise": (cfg.get("expertise") or "intermediate")})
+                    msg = self._agent_turn(cfg, idx, ident, canvas_objects, transcript, is_first)
+                    new_object = str(safe_get(msg, "new_object", "a new element")).strip() or "a new element"
+                    self.emit({"type": "agent", "agent_idx": idx, "name": name, "turn": turn, "round": rnd,
+                               "persona_name": ident["persona_name"], "object": new_object, "message": msg})
+                    transcript.append(f"R{rnd} - {name} ({ident['persona_name']}) added '{new_object}' "
+                                      f"({safe_get(msg,'where','')}).")
+                    added.append(new_object)
+
+                    if self.make_images:
+                        self.emit({"type": "image_pending", "turn": turn, "agent_idx": idx, "name": name})
+                        try:
+                            if is_first:
+                                gp = (f"A painting - {ident['image_style']}. The very BEGINNING of an artwork about: "
+                                      f"{self.prompt}. The canvas currently contains ONLY one element: {new_object}. "
+                                      f"Large empty unpainted areas, minimal, just the first object blocked in. "
+                                      f"Overall style: {self.style or 'cohesive painterly'}.")
+                                current_b64 = azure_generate_image_b64(gp)
+                            else:
+                                ep = (f"Add exactly ONE new element to this existing painting: {new_object} "
+                                      f"(placed at {safe_get(msg,'where','an appropriate empty area')}), rendered "
+                                      f"{ident['image_style']}. CRITICAL: keep everything already in the painting EXACTLY "
+                                      f"as it is - do not change, restyle, refine, or repaint existing objects, "
+                                      f"composition, or colours. ONLY ADD the one new element. Theme: {self.prompt}. "
+                                      f"Overall style: {self.style or 'cohesive painterly'}.")
+                                current_b64 = azure_edit_image_b64(ep, [current_b64])
+                            if current_b64:
+                                label = f"R{rnd} - Agent {idx+1} ({ident['persona_name']}): {new_object}"
+                                self.emit({"type": "image", "turn": turn, "total": total, "round": rnd,
+                                           "agent_idx": idx, "name": name, "object": new_object, "label": label,
+                                           "image": "data:image/png;base64," + current_b64})
+                        except Exception as exc:
+                            self.emit({"type": "warning",
+                                       "message": f"Turn {turn} ({name}) image step failed: {exc}"})
+                if stopped_early:
+                    break
+
+            if stopped_early:
+                self.emit({"type": "warning", "message": "Stopped early by user - presenting the work so far"})
+
+            # JUDGE — scores the sequential collaboration (no edits), like the ARIA/NEXUS critic.
+            self.emit({"type": "turn", "turn": "JUDGE", "total": total, "agent_idx": None,
+                       "name": "JUDGE", "persona_name": "Critic", "expertise": "-"})
+            evaluation = self._run_critic(", ".join(added), transcript)
+            self.emit({"type": "critic", "evaluation": evaluation})
+            try:
+                composite = float(evaluation.get("scores", {}).get("composite", 0.0))
+            except Exception:
+                composite = 0.0
+
+            if self.make_images and current_b64:
+                self.emit({"type": "final", "label": "Final combined artwork (4-agent chain)",
+                           "image": "data:image/png;base64," + current_b64})
+            self.emit({"type": "summary", "outcome": "Completed", "turns": turn, "objects": added,
+                       "rounds": self.rounds, "composite": composite, "elapsed": round(time.time() - start, 1)})
+        except Exception as exc:
+            self.emit({"type": "error", "message": str(exc)})
+        finally:
+            self.emit({"type": "done"})
+
+
+# ===========================================================================
 #  FastAPI app
 # ===========================================================================
 app = FastAPI(title="CanvasMind Generative-Agent App")
@@ -1045,6 +1326,50 @@ def hero_image():
     return JSONResponse({"error": "no hero image — drop one at assets/hero.png"}, status_code=404)
 
 
+@app.get("/assets/quad-hero")
+def quad_hero_image():
+    """Serve the Quad-Agent hero image (drop one at assets/4_Agent_Art.png)."""
+    base = APP_DIR / "assets"
+    for name in ("4_Agent_Art.png", "4_Agent_Art.jpg", "quad-hero.png", "quad_hero.png", "quad-hero.jpg", "quad-hero.webp"):
+        p = base / name
+        if p.exists():
+            return FileResponse(str(p))
+    return JSONResponse({"error": "no quad hero image — drop one at assets/4_Agent_Art.png"}, status_code=404)
+
+
+@app.get("/api/quad/personas")
+def quad_personas() -> JSONResponse:
+    return JSONResponse({
+        "personas": [{"key": k, "name": v["name"], "blurb": v["blurb"]} for k, v in QUAD_PERSONAS.items()],
+        "levels": EXPERTISE_LEVELS,
+    })
+
+
+@app.post("/api/quad/start")
+async def quad_start(request: Request) -> JSONResponse:
+    body = await request.json()
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return JSONResponse({"error": "prompt is required"}, status_code=400)
+    persona_keys = list(QUAD_PERSONAS.keys())
+    agents_in = body.get("agents") or []
+    agents: List[Dict[str, Any]] = []
+    for i in range(4):
+        a = agents_in[i] if i < len(agents_in) and isinstance(agents_in[i], dict) else {}
+        persona = a.get("persona") if a.get("persona") in QUAD_PERSONAS else persona_keys[i % len(persona_keys)]
+        expertise = a.get("expertise") if a.get("expertise") in EXPERTISE_LEVELS else "intermediate"
+        agents.append({"name": (a.get("name") or f"Agent {i+1}").strip(),
+                       "persona": persona,
+                       "custom_prompt": (a.get("custom_prompt") or "").strip(),
+                       "expertise": expertise})
+    sess = QuadSession(prompt=prompt, style=(body.get("style") or "").strip(),
+                       make_images=bool(body.get("images", True)), rounds=int(body.get("rounds", 1)),
+                       agents=agents)
+    SESSIONS[sess.id] = sess
+    sess.start()
+    return JSONResponse({"session_id": sess.id})
+
+
 @app.get("/")
 def index() -> HTMLResponse:
     return HTMLResponse(INDEX_HTML)
@@ -1101,9 +1426,13 @@ INDEX_HTML = r"""<!DOCTYPE html>
     100%{transform:translate3d(var(--dx,18px),-118vh,0) scale(1.14);opacity:0}}
 
   /* ---------- glowing, breathing, looping hero image ---------- */
-  #heroLayer{position:fixed;inset:0;z-index:0;overflow:hidden;background:#000}
+  #heroLayer,#quadHeroLayer{position:fixed;inset:0;z-index:0;overflow:hidden;background:#000}
   .heroImg{position:absolute;inset:-3%;
     background-image:url(assets/hero),radial-gradient(120% 95% at 50% 16%, #1b1636 0%, #0b0b18 52%, #000 100%);
+    background-size:cover,cover;background-position:center,center;background-repeat:no-repeat,no-repeat;
+    animation:heroBreath 19s ease-in-out infinite}
+  .quadHeroImg{position:absolute;inset:-3%;
+    background-image:url(assets/quad-hero),radial-gradient(120% 95% at 50% 16%, #241a12 0%, #0b0b12 52%, #000 100%);
     background-size:cover,cover;background-position:center,center;background-repeat:no-repeat,no-repeat;
     animation:heroBreath 19s ease-in-out infinite}
   @keyframes heroBreath{0%,100%{transform:scale(1.0) translateY(0);filter:brightness(0.9) saturate(1.05)}
@@ -1135,6 +1464,33 @@ INDEX_HTML = r"""<!DOCTYPE html>
   .cm-select:hover{border-color:#fff}
   .cm-select option{background:#0a0a0a;color:#fff;font-family:'Inter',sans-serif}
   .cm-levelbadge{text-transform:capitalize;letter-spacing:0.1em}
+
+  /* ---------- quad-agent pipeline ---------- */
+  .qcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin:30px 0 40px}
+  .qcard{border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:18px;background:rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:12px}
+  .qcard .qidx{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:#8d8d8d}
+  .qinput{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);color:#fff;font-size:15px;font-weight:300;padding:0 0 8px;outline:none}
+  .qtext{width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.16);border-radius:10px;color:#fff;font-size:13px;line-height:1.45;padding:10px;outline:none;resize:vertical;min-height:70px;display:none}
+  .qtoggle{align-self:flex-start;background:transparent;border:1px solid rgba(255,255,255,0.24);color:#cdcdcd;border-radius:75px;padding:5px 12px;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer}
+  .qtoggle.on{background:#fff;color:#000}
+  .qpanels{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-bottom:28px}
+  .qpanel{border:1px solid rgba(255,255,255,0.14);border-radius:12px;padding:12px;background:rgba(255,255,255,0.02);min-height:120px;display:flex;flex-direction:column;gap:10px;transition:border-color .3s,box-shadow .3s}
+  .qpanel.active{border-color:rgba(255,255,255,0.55);box-shadow:0 0 26px rgba(255,255,255,0.06)}
+  .qpanel .qhd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:8px}
+  .qfeed{display:flex;flex-direction:column;gap:10px;max-height:260px;overflow-y:auto}
+  .qglobal{display:grid;grid-template-columns:2fr 1fr auto;gap:26px;align-items:end;border-top:1px solid rgba(255,255,255,0.16);padding-top:30px}
+  @media (max-width:760px){.qglobal{grid-template-columns:1fr !important;gap:18px !important}}
+  /* expandable per-turn agent cards */
+  .qcardturn{border-left:1px solid rgba(255,255,255,0.18);padding-left:10px;animation:fadeUp .5s ease both}
+  .qturnhead{display:flex;align-items:center;justify-content:space-between;width:100%;background:transparent;border:none;padding:0;cursor:pointer}
+  .qturnlabel{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a4a4a}
+  .qchev{font-size:10px;color:#6d6d6d;transition:color .2s}
+  .qturnhead:hover .qchev,.qturnhead:hover .qturnlabel{color:#9a9a9a}
+  .qobj{font-size:14px;font-weight:300;color:#fff;line-height:1.3;margin:4px 0 2px}
+  .qdetails{margin-top:6px;border-top:1px dashed rgba(255,255,255,0.12);padding-top:6px}
+  .qk{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#4a4a4a;margin-top:6px}
+  .qv{font-size:11px;color:#8d8d8d;line-height:1.4}
+  #qBriefWrap:hover #qBrief{color:#cdcdcd}
 
   /* ---------- responsive ---------- */
   @media (max-width: 1024px){
@@ -1171,6 +1527,13 @@ INDEX_HTML = r"""<!DOCTYPE html>
   <div class="heroScrim"></div>
 </div>
 
+<!-- Quad-Agent hero (shown on the quad config screen) -->
+<div id="quadHeroLayer" style="display:none">
+  <div class="quadHeroImg"></div>
+  <div class="heroGlow"></div>
+  <div class="heroScrim"></div>
+</div>
+
 <!-- continuously levitating bubbles, sitewide -->
 <div id="bubbles"></div>
 
@@ -1187,6 +1550,8 @@ INDEX_HTML = r"""<!DOCTYPE html>
         <span id="statusDot" style="width:6px;height:6px;border-radius:50%;background:#6d6d6d;display:inline-block"></span><span id="statusText">Demo mode</span>
       </span>
       <span id="modelInfo" style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6d6d6d"></span>
+      <button id="toQuad" style="border:1px solid rgba(255,255,255,0.4);background:transparent;color:#fff;border-radius:75px;padding:6px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">⧉ Quad Pipeline</button>
+      <button id="toDual" style="display:none;border:1px solid rgba(255,255,255,0.4);background:transparent;color:#fff;border-radius:75px;padding:6px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">← ARIA · NEXUS</button>
       <button id="modeChip" style="border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;border-radius:75px;padding:6px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">Demo</button>
       <button id="stopBtn" style="display:none;border:1px solid rgba(255,255,255,0.45);background:transparent;color:#fff;border-radius:75px;padding:6px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">Stop &amp; Judge ↦</button>
       <button id="navAction" style="display:none;border:none;background:transparent;color:#9a9a9a;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;font-weight:400">New session</button>
@@ -1367,6 +1732,121 @@ INDEX_HTML = r"""<!DOCTYPE html>
     </div>
   </section>
 
+  <!-- ============ QUAD-AGENT CONFIG ============ -->
+  <section id="quadConfig" style="display:none;min-height:100vh;padding:110px 40px 70px;max-width:1280px;margin:0 auto">
+    <p style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#9a9a9a;margin-bottom:22px">Advanced · Quad-Agent Sequential Pipeline</p>
+    <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:500;font-size:clamp(40px,7vw,84px);line-height:0.95;color:#fff;margin-bottom:18px">Four minds, in sequence.</h1>
+    <p style="font-size:16px;line-height:1.5;color:#cdcdcd;max-width:640px">Four independently-configured persona agents each add one object per round, in strict order — pure additive co-creation, no JUDGE.</p>
+
+    <div class="qglobal">
+      <div>
+        <label class="cm-field-label">Global Prompt</label>
+        <textarea id="qPrompt" rows="2" placeholder="Describe the artwork the four agents build together…" style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#fff;font-size:18px;font-weight:300;line-height:1.4;padding:8px 0 12px;resize:none;outline:none"></textarea>
+      </div>
+      <div>
+        <label class="cm-field-label">Style Hints</label>
+        <input id="qStyle" placeholder="e.g. oceanic, stormy" style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#cdcdcd;font-size:15px;padding:8px 0 12px;outline:none">
+      </div>
+      <div>
+        <label class="cm-field-label">Rounds</label>
+        <div style="display:flex;align-items:center;gap:14px;margin-top:8px">
+          <button id="qRoundsDown" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:18px;cursor:pointer;line-height:1">−</button>
+          <span id="qRoundsVal" style="font-size:40px;font-weight:300;color:#fff;min-width:44px;text-align:center">1</span>
+          <button id="qRoundsUp" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;font-size:18px;cursor:pointer;line-height:1">+</button>
+        </div>
+        <p style="font-size:11px;color:#8d8d8d;margin-top:8px"><span id="qTotalTurns">4</span> step images · 4 agents × rounds</p>
+      </div>
+    </div>
+
+    <div id="qCards" class="qcards"></div>
+
+    <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+      <span class="glowwrap"><button id="qLaunch" style="background:#fff;color:#000;border:none;border-radius:75px;padding:15px 36px;font-size:13px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">Launch Quad Session →</button></span>
+      <button id="qBack" style="background:transparent;color:#9a9a9a;border:none;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">← Back to ARIA · NEXUS</button>
+    </div>
+  </section>
+
+  <!-- ============ QUAD-AGENT LIVE STAGE ============ -->
+  <section id="quadStage" style="display:none;min-height:100vh;padding:84px 40px 40px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.12);padding-bottom:16px;margin-bottom:22px;gap:24px;flex-wrap:wrap">
+      <div id="qBriefWrap" style="flex:1;min-width:260px;cursor:pointer" title="Click to read the full brief">
+        <p style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#6d6d6d;margin-bottom:8px">Quad Pipeline · Brief <span style="color:#5a5a5a">· click to expand</span></p>
+        <h2 id="qBrief" style="font-size:clamp(15px,1.7vw,22px);font-weight:300;line-height:1.3;color:#fff;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden"></h2>
+        <p id="qStyle2" style="font-size:12px;letter-spacing:0.06em;color:#9a9a9a;margin-top:8px;text-transform:uppercase"></p>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;justify-content:flex-end">
+        <div style="text-align:right"><p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6d6d6d;margin-bottom:6px">Turn</p>
+          <p id="qTurnCounter" style="font-size:40px;font-weight:300;line-height:1;color:#fff">00 / 04</p></div>
+        <button id="qStopBtn" style="display:none;border:1px solid rgba(255,255,255,0.45);background:transparent;color:#fff;border-radius:75px;padding:8px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">Stop ↦</button>
+        <button id="qNewBtn" style="border:1px solid rgba(255,255,255,0.28);background:transparent;color:#cdcdcd;border-radius:75px;padding:8px 16px;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer">New config</button>
+      </div>
+    </div>
+
+    <div id="qPanels" class="qpanels"></div>
+
+    <div class="judgeGrid" style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:28px;align-items:start">
+      <div>
+        <div id="qCanvas" style="position:relative;width:100%;aspect-ratio:1/1;background:#050505;border:1px solid rgba(255,255,255,0.12);overflow:hidden;animation:breathe 9s ease-in-out infinite">
+          <div id="qCanvasBlobs" style="position:absolute;inset:0"></div>
+          <img id="qCanvasImg" alt="quad canvas" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+          <div id="qCanvasEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#3a3a3a">awaiting first object</span></div>
+          <div style="position:absolute;top:16px;left:16px"><span id="qCanvasTag" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,0.45);padding:5px 10px;backdrop-filter:blur(4px)">Shared canvas</span></div>
+          <div id="qComp" style="display:none;position:absolute;bottom:16px;left:16px;align-items:center;gap:8px;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#fff"><span style="width:5px;height:5px;border-radius:50%;background:#fff;animation:dotpulse 1.2s ease infinite"></span><span id="qCompText">Compositing</span></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+          <span style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#6d6d6d">Filmstrip · <span id="qStepCount">0</span> steps</span>
+          <div style="display:flex;gap:12px;align-items:center">
+            <button id="qViewLatest" style="border:none;background:transparent;color:#6d6d6d;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;display:none">↺ Latest</button>
+            <button id="qDownloadBtn" style="border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;border-radius:75px;padding:5px 12px;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;opacity:0.5" disabled>Download steps</button>
+          </div>
+        </div>
+        <div id="qFilmstrip" style="display:flex;flex-wrap:wrap;gap:8px;max-height:340px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- JUDGE critique band (re-added, mirrors ARIA/NEXUS) -->
+    <div id="qJudge" style="display:none;margin-top:48px;border-top:1px solid rgba(255,255,255,0.12);padding-top:40px;animation:fadeUp .8s ease both">
+      <div style="display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:36px">
+        <span style="width:10px;height:10px;border:1px solid #fff;border-radius:50%;display:inline-block"></span>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.16em;color:#fff">JUDGE</span>
+        <span style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#6d6d6d">Critic · scores the sequential collaboration</span>
+      </div>
+      <div class="judgeGrid" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:56px;max-width:1120px;margin:0 auto;align-items:start">
+        <div id="qScores" style="display:flex;flex-direction:column;gap:20px"></div>
+        <div>
+          <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6d6d6d;margin-bottom:8px">Composite</p>
+          <p id="qComposite" style="font-size:84px;font-weight:300;line-height:0.9;letter-spacing:-0.03em;color:#fff;margin-bottom:22px">—</p>
+          <p id="qCriticReasoning" style="font-size:14px;line-height:1.55;color:#9a9a9a;margin-bottom:16px"></p>
+          <div id="qHighlights" style="margin-bottom:22px"></div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            <button id="qJudgeDownload" style="background:#fff;color:#000;border:none;border-radius:75px;padding:12px 26px;font-size:12px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;opacity:0.5" disabled>Download all steps</button>
+            <button id="qJudgeNew" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.28);border-radius:75px;padding:12px 26px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer">New session</button>
+          </div>
+        </div>
+      </div>
+      <p id="qFinalSummary" style="display:none;max-width:880px;margin:44px auto 0;text-align:center;font-size:clamp(20px,2.4vw,28px);font-weight:300;line-height:1.3;color:#fff"></p>
+    </div>
+
+    <div style="margin-top:40px;border-top:1px solid rgba(255,255,255,0.08);padding-top:18px">
+      <p style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#4a4a4a;margin-bottom:12px">Event Stream</p>
+      <div id="qLog" style="display:flex;flex-direction:column;gap:5px;max-height:150px;overflow-y:auto"></div>
+    </div>
+
+    <!-- full-brief modal -->
+    <div id="qBriefModal" style="display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,0.82);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:40px">
+      <div style="max-width:760px;width:100%;max-height:80vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.16);border-radius:16px;background:#0a0a0f;padding:34px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+          <p style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#8d8d8d">Full Brief</p>
+          <button id="qModalClose" style="border:1px solid rgba(255,255,255,0.28);background:transparent;color:#fff;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:15px;line-height:1">×</button>
+        </div>
+        <h3 id="qModalBrief" style="font-size:clamp(22px,3vw,34px);font-weight:300;line-height:1.28;color:#fff;margin-bottom:16px"></h3>
+        <p id="qModalStyle" style="font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:#9a9a9a"></p>
+      </div>
+    </div>
+  </section>
+
 </div>
 
 <!-- ============ FULL-PROMPT MEMO POPUP ============ -->
@@ -1454,6 +1934,7 @@ function setStatus(){
   updateNavButtons();
 }
 function updateNavButtons(){
+  if(typeof appMode!=='undefined' && appMode==='quad'){ $('stopBtn').style.display='none'; $('navAction').style.display='none'; return; }
   $('stopBtn').style.display = (state.phase==='running') ? 'inline-block' : 'none';
   $('navAction').style.display = (state.phase==='done') ? 'inline-block' : 'none';
 }
@@ -2023,6 +2504,311 @@ $('stageBrief').onclick = openBriefModal;
 $('briefModalClose').onclick = closeBriefModal;
 $('briefModal').onclick = function(e){ if(e.target === $('briefModal')){ closeBriefModal(); } };
 document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closeBriefModal(); } });
+
+// ============================================================
+//  QUAD-AGENT PIPELINE (advanced view — isolated from the 2-agent flow)
+// ============================================================
+var appMode = 'dual';
+var qstate = { rounds:1, prompt:'', style:'', agents:[{},{},{},{}], personas:[],
+  levels:['beginner','intermediate','expert'], loaded:false,
+  turns:[], frames:[], viewIndex:null, sessionId:null, error:null, imagesEnabled:false, totalTurns:4, meta:[] };
+var qtimers=[], qes=null;
+function qClearTimers(){ qtimers.forEach(clearTimeout); qtimers=[]; }
+function qAt(ms,fn){ qtimers.push(setTimeout(fn,ms)); }
+
+function setAppMode(mode){
+  appMode = mode;
+  var quad = (mode==='quad');
+  if(quad){
+    $('briefing').style.display='none'; $('stage').style.display='none'; $('heroLayer').style.display='none';
+    $('quadStage').style.display='none'; $('quadConfig').style.display='block';
+    $('quadHeroLayer').style.display='block';
+    $('toQuad').style.display='none'; $('toDual').style.display='inline-block';
+    $('stopBtn').style.display='none'; $('navAction').style.display='none';
+    if(qstate.loaded){ qBuildCards(); } else { qFetchPersonas(); }
+  } else {
+    qClearTimers(); if(qes){ qes.close(); qes=null; }
+    $('quadConfig').style.display='none'; $('quadStage').style.display='none';
+    $('quadHeroLayer').style.display='none';
+    $('toQuad').style.display='inline-block'; $('toDual').style.display='none';
+    resetSession();
+  }
+}
+
+var QUAD_FALLBACK = [
+  {key:'vanguard_minimalist',name:'The Vanguard Minimalist'},{key:'neo_noir_cyberpunk',name:'The Neo-Noir Cyberpunk'},
+  {key:'biomorphic_surrealist',name:'The Biomorphic Surrealist'},{key:'baroque_traditionalist',name:'The Baroque Traditionalist'},
+  {key:'kinetic_futurist',name:'The Kinetic Futurist'},{key:'luminous_impressionist',name:'The Luminous Impressionist'} ];
+function qFetchPersonas(){
+  fetch('api/quad/personas').then(function(r){ return r.json(); }).then(function(j){
+    qstate.personas = (j.personas&&j.personas.length)?j.personas:QUAD_FALLBACK;
+    if(j.levels&&j.levels.length){ qstate.levels=j.levels; }
+    qstate.loaded=true; qBuildCards();
+  }).catch(function(){ qstate.personas=QUAD_FALLBACK; qstate.loaded=true; qBuildCards(); });
+}
+function qPersonaName(key){ for(var i=0;i<qstate.personas.length;i++){ if(qstate.personas[i].key===key) return qstate.personas[i].name; } return key; }
+
+function qBuildCards(){
+  var cards=$('qCards'); if(!cards) return; cards.innerHTML='';
+  for(var i=0;i<4;i++){
+    var a=qstate.agents[i]||{};
+    if(!a.persona && qstate.personas.length){ a.persona = qstate.personas[i % qstate.personas.length].key; }
+    if(!a.name){ a.name = 'Agent '+(i+1); }
+    if(!a.expertise){ a.expertise='intermediate'; }
+    if(a.custom_prompt==null){ a.custom_prompt=''; }
+    qstate.agents[i]=a;
+    var pOpts = qstate.personas.map(function(p){ return '<option value="'+esc(p.key)+'"'+(p.key===a.persona?' selected':'')+'>'+esc(p.name)+'</option>'; }).join('');
+    var lOpts = qstate.levels.map(function(l){ return '<option value="'+esc(l)+'"'+(l===a.expertise?' selected':'')+'>'+esc(cap(l))+'</option>'; }).join('');
+    var card=document.createElement('div'); card.className='qcard';
+    card.innerHTML =
+      '<div class="qidx">Agent 0'+(i+1)+'</div>'
+     +'<input class="qinput qName" data-i="'+i+'" value="'+esc(a.name)+'" placeholder="Agent name"/>'
+     +'<label class="cm-field-label">Persona Preset</label>'
+     +'<select class="cm-select qPersona" data-i="'+i+'" style="width:100%">'+pOpts+'</select>'
+     +'<button class="qtoggle qCustomToggle'+(a.custom_prompt?' on':'')+'" data-i="'+i+'">Configure Custom Agent</button>'
+     +'<textarea class="qtext qCustom" data-i="'+i+'" placeholder="Raw bespoke persona prompt (overrides the preset)"'+(a.custom_prompt?' style="display:block"':'')+'>'+esc(a.custom_prompt)+'</textarea>'
+     +'<label class="cm-field-label">Expertise</label>'
+     +'<select class="cm-select qLevel" data-i="'+i+'" style="width:100%">'+lOpts+'</select>';
+    cards.appendChild(card);
+  }
+  cards.querySelectorAll('.qName').forEach(function(el){ el.oninput=function(){ qstate.agents[+this.getAttribute('data-i')].name=this.value; }; });
+  cards.querySelectorAll('.qPersona').forEach(function(el){ el.onchange=function(){ qstate.agents[+this.getAttribute('data-i')].persona=this.value; }; });
+  cards.querySelectorAll('.qLevel').forEach(function(el){ el.onchange=function(){ qstate.agents[+this.getAttribute('data-i')].expertise=this.value; }; });
+  cards.querySelectorAll('.qCustom').forEach(function(el){ el.oninput=function(){ qstate.agents[+this.getAttribute('data-i')].custom_prompt=this.value; }; });
+  cards.querySelectorAll('.qCustomToggle').forEach(function(el){ el.onclick=function(){
+    var i=+this.getAttribute('data-i'); var ta=cards.querySelector('.qCustom[data-i="'+i+'"]');
+    var show=(ta.style.display!=='block'); ta.style.display=show?'block':'none'; this.classList.toggle('on',show); }; });
+}
+function qSetRounds(r){ qstate.rounds=Math.max(1,Math.min(6,r)); $('qRoundsVal').textContent=qstate.rounds; $('qTotalTurns').textContent=qstate.rounds*4; }
+
+// ---- quad live-stage helpers ----
+function qLog(type,text){
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:16px;font-size:11px;letter-spacing:0.04em;color:#6d6d6d;animation:fadeUp .4s ease both;align-items:baseline';
+  row.innerHTML='<span style="color:#4a4a4a;text-transform:uppercase;letter-spacing:0.14em;flex:0 0 96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(type)+'</span>'
+    +'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9a9a9a">'+esc(text)+'</span>';
+  var log=$('qLog'); log.appendChild(row); while(log.children.length>60){ log.removeChild(log.firstChild); } log.scrollTop=log.scrollHeight;
+}
+function qSetTag(t){ $('qCanvasTag').textContent=t; }
+function qSetComp(on,name){ $('qComp').style.display=on?'flex':'none'; if(on&&name){ $('qCompText').textContent=name+' painting'; } }
+function qShowImage(src){ $('qCanvasBlobs').style.display='none'; $('qCanvasEmpty').style.display='none'; var im=$('qCanvasImg'); im.src=src; im.style.display='block'; }
+function qAddBlob(b){ $('qCanvasEmpty').style.display='none'; $('qCanvasImg').style.display='none'; $('qCanvasBlobs').style.display='block';
+  var d=document.createElement('div'); d.setAttribute('data-blob','1');
+  d.style.cssText='position:absolute;left:'+b.x+';top:'+b.y+';width:'+b.size+';height:'+b.size+';transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,'+b.c0+' 0%,'+b.c1+' 52%,transparent 72%);mix-blend-mode:screen;filter:blur(10px);opacity:0;transition:opacity 1.6s ease';
+  $('qCanvasBlobs').appendChild(d); requestAnimationFrame(function(){ d.style.opacity='0.9'; }); }
+function qSyncBlobs(){ $('qCanvasBlobs').querySelectorAll('[data-blob]').forEach(function(b,i){ b.style.opacity=((qstate.viewIndex==null)||(i<qstate.viewIndex))?'0.9':'0'; }); }
+function qActivatePanel(idx){ for(var i=0;i<4;i++){ var p=$('qPanel'+i); if(p){ p.classList.toggle('active', i===idx); } } }
+function qAddCard(d){
+  var m=d.message||{}; var feed=$('qFeed'+d.agent_idx); if(!feed) return;
+  var pal=Array.isArray(m.palette)?m.palette.join(' · '):(m.palette||'');
+  var conf=(m.confidence_score!=null)?Math.round(Number(m.confidence_score)*100)+'%':'';
+  var details=''
+    +(m.sees_on_canvas?'<p class="qk">Sees on canvas</p><p class="qv">'+esc(m.sees_on_canvas)+'</p>':'')
+    +(m.where?'<p class="qk">Placed</p><p class="qv">'+esc(m.where)+'</p>':'')
+    +(pal?'<p class="qk">Palette</p><p class="qv">'+esc(pal)+'</p>':'')
+    +(m.reasoning?'<p class="qk">Why</p><p class="qv">'+esc(m.reasoning)+'</p>':'')
+    +(conf?'<p class="qk">Confidence</p><p class="qv">'+conf+'</p>':'');
+  var div=document.createElement('div'); div.className='qcardturn';
+  div.innerHTML='<button class="qturnhead" type="button"><span class="qturnlabel">Turn '+esc(d.turn)+' · adds</span><span class="qchev">▾</span></button>'
+    +'<p class="qobj">'+esc(d.object||m.new_object||'')+'</p>'
+    +'<div class="qdetails" style="display:none">'+(details||'<p class="qv">No further detail.</p>')+'</div>';
+  div.querySelector('.qturnhead').onclick=function(){
+    var dt=div.querySelector('.qdetails'); var open=(dt.style.display==='none');
+    dt.style.display=open?'block':'none'; div.querySelector('.qchev').textContent=open?'▴':'▾';
+  };
+  feed.appendChild(div); feed.scrollTop=feed.scrollHeight;
+}
+function qBuildPanels(meta){
+  var wrap=$('qPanels'); if(!wrap) return; wrap.innerHTML='';
+  for(var i=0;i<4;i++){
+    var m = (meta&&meta[i]) ? meta[i] : { name:(qstate.agents[i].name||('Agent '+(i+1))),
+      persona_name:(qstate.agents[i].custom_prompt?(qstate.agents[i].name||'Custom'):qPersonaName(qstate.agents[i].persona)),
+      expertise:(qstate.agents[i].expertise||'intermediate') };
+    var p=document.createElement('div'); p.className='qpanel'; p.id='qPanel'+i;
+    p.innerHTML='<div class="qhd"><span style="font-size:11px;font-weight:600;letter-spacing:0.14em;color:#fff">'+esc(m.name)+'</span>'
+      +'<span style="font-size:10px;letter-spacing:0.08em;color:#9a9a9a">'+esc(m.persona_name)+'</span>'
+      +'<span class="cm-levelbadge" style="margin-left:auto;font-size:9px;color:#9a9a9a;border:1px solid rgba(255,255,255,0.28);border-radius:75px;padding:2px 8px">'+esc(cap(m.expertise))+'</span></div>'
+      +'<div class="qfeed" id="qFeed'+i+'"></div>';
+    wrap.appendChild(p);
+  }
+}
+function qAddFrame(f){
+  qstate.frames.push(f); $('qStepCount').textContent=qstate.frames.length;
+  var inner = f.image ? '<img src="'+f.image+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>'
+    : '<div style="position:absolute;inset:0;background:'+(f.blob?('radial-gradient(circle at 50% 60%,'+f.blob.c0+','+f.blob.c1+' 70%)'):'#101010')+';opacity:0.95"></div>';
+  var btn=document.createElement('button'); btn.title=f.label||('step '+f.n);
+  btn.style.cssText='flex:0 0 auto;width:64px;height:64px;border:1px solid rgba(255,255,255,0.16);background:#050505;position:relative;cursor:pointer;padding:0;overflow:hidden;animation:fadeUp .5s ease both';
+  btn.innerHTML=inner+'<span style="position:absolute;bottom:3px;left:5px;font-size:9px;color:#fff;mix-blend-mode:difference">'+esc(f.n)+'</span>';
+  btn.onclick=function(){ qScrub(f.n); };
+  $('qFilmstrip').appendChild(btn);
+}
+function qScrub(n){ qstate.viewIndex=n; $('qViewLatest').style.display='inline-block';
+  var f=qstate.frames.filter(function(x){return x.n===n;})[0];
+  if(f&&f.image){ qShowImage(f.image); } else { qSyncBlobs(); }
+  qSetTag('Step '+n+' / '+qstate.turns.length); }
+function qViewLatest(){ qstate.viewIndex=null; $('qViewLatest').style.display='none';
+  var last=qstate.frames[qstate.frames.length-1];
+  if(last&&last.image){ qShowImage(last.image); } else { qSyncBlobs(); }
+  qSetTag('Shared canvas'); }
+function qDownloadAll(){
+  var imgs=qstate.frames.filter(function(f){ return typeof f.image==='string' && f.image.indexOf('data:')===0; });
+  if(!imgs.length){ qLog('warning','demo mode · connect Live to export real PNGs'); return; }
+  var delay=0; imgs.forEach(function(f,i){ setTimeout(function(){ var a=document.createElement('a'); a.href=f.image;
+    a.download='canvasmind_quad_step'+String(i+1).padStart(2,'0')+'_'+String(f.object||'').replace(/[^a-z0-9]+/gi,'_').slice(0,24)+'.png';
+    document.body.appendChild(a); a.click(); a.remove(); }, delay); delay+=350; });
+  qLog('download','saving '+imgs.length+' step image(s)');
+}
+function qResetStage(){
+  qstate.turns=[]; qstate.frames=[]; qstate.viewIndex=null; qstate.error=null;
+  $('qFilmstrip').innerHTML=''; $('qLog').innerHTML=''; $('qCanvasBlobs').innerHTML='';
+  $('qCanvasImg').style.display='none'; $('qCanvasImg').removeAttribute('src'); $('qCanvasBlobs').style.display='block';
+  $('qCanvasEmpty').style.display='flex'; $('qStepCount').textContent='0'; $('qViewLatest').style.display='none';
+  $('qDownloadBtn').disabled=true; $('qDownloadBtn').style.opacity='0.5'; qSetComp(false);
+  $('qJudge').style.display='none'; $('qScores').innerHTML=''; $('qComposite').textContent='—';
+  $('qCriticReasoning').textContent=''; $('qHighlights').innerHTML=''; $('qFinalSummary').style.display='none';
+  $('qJudgeDownload').disabled=true; $('qJudgeDownload').style.opacity='0.5';
+}
+
+var QSCORE_KEYS=['compositional_coherence','style_fidelity','emotional_resonance','originality','collaboration_quality'];
+var QSCORE_LABELS={compositional_coherence:'Compositional coherence',style_fidelity:'Style fidelity',emotional_resonance:'Emotional resonance',originality:'Originality',collaboration_quality:'Collaboration quality'};
+var QMOCK_CRITIC={scores:{compositional_coherence:8.4,style_fidelity:8.8,emotional_resonance:8.1,originality:9.0,collaboration_quality:8.6,composite:8.58},
+  reasoning:'Four distinct voices resolved into one canvas: the minimalist scaffolding gave the cyberpunk and surrealist room to escalate, and the baroque agent unified the palette without overwhelming the restraint set on the first turn.',
+  highlights:['The mirrored obelisk (Agent 3) tied the neon and the negative space together','The closing gilded arch reframed the whole sequence as intentional'],
+  final_summary:'A relay of four sensibilities that reads as one deliberate painting — sequential, not scattered.'};
+function qRenderCritic(ev){
+  var s=ev.scores||{}; var html='';
+  QSCORE_KEYS.forEach(function(k){
+    var v=Math.max(0,Math.min(10,parseFloat(s[k])||0)); var val100=Math.round(v*10);
+    html+='<div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:10px"><span style="font-size:13px;color:#fff">'+QSCORE_LABELS[k]+'</span><span style="font-size:13px;color:#9a9a9a">'+val100+'</span></div><div style="height:1px;background:rgba(255,255,255,0.12);position:relative"><div style="position:absolute;left:0;top:0;height:1px;background:#fff;width:'+(v*10)+'%;transition:width 1.3s cubic-bezier(0.16,1,0.3,1)"></div></div></div>';
+  });
+  $('qScores').innerHTML=html;
+  var comp=parseFloat(s.composite);
+  if(isNaN(comp)){ var vals=QSCORE_KEYS.map(function(k){return parseFloat(s[k])||0;}); comp=vals.reduce(function(a,b){return a+b;},0)/(vals.length||1); }
+  $('qComposite').textContent=(Math.max(0,Math.min(10,comp))*10).toFixed(1);
+  $('qCriticReasoning').textContent=ev.reasoning||'';
+  var hl=ev.highlights||[];
+  $('qHighlights').innerHTML=hl.length?hl.map(function(h){return '<p style="font-size:12px;line-height:1.5;color:#6d6d6d;margin-bottom:6px;padding-left:14px;position:relative"><span style="position:absolute;left:0">·</span>'+esc(h)+'</p>';}).join(''):'';
+  if(ev.final_summary){ $('qFinalSummary').style.display='block'; $('qFinalSummary').textContent='“'+ev.final_summary+'”'; }
+  if(qstate.frames.some(function(f){return f.image;})){ $('qJudgeDownload').disabled=false; $('qJudgeDownload').style.opacity='1'; }
+  $('qJudge').style.display='block';
+}
+function qHandle(type,d){
+  d=d||{};
+  switch(type){
+    case 'session':
+      qstate.meta=d.agents||[]; qstate.imagesEnabled=!!d.images; qstate.totalTurns=d.total_turns||(qstate.rounds*4);
+      $('qBrief').textContent=d.prompt||qstate.prompt||''; $('qStyle2').textContent=d.style||qstate.style||'';
+      $('qModalBrief').textContent=d.prompt||qstate.prompt||''; $('qModalStyle').textContent=(d.style||qstate.style)?('Style — '+(d.style||qstate.style)):'';
+      $('qTurnCounter').textContent='00 / '+qstate.totalTurns;
+      qBuildPanels(qstate.meta.length?qstate.meta:null);
+      qLog('session','brief · '+(d.prompt||qstate.prompt||'')); break;
+    case 'turn':
+      if(d.agent_idx==null || d.name==='JUDGE'){ qActivatePanel(-1); qSetComp(false); qSetTag('Composing critique'); qLog('turn','JUDGE scoring the sequence'); break; }
+      qActivatePanel(d.agent_idx);
+      $('qTurnCounter').textContent=String(d.turn).padStart(2,'0')+' / '+(d.total||qstate.totalTurns);
+      qSetTag((d.name||('Agent '+((d.agent_idx||0)+1)))+' · adding'); qSetComp(false);
+      qLog('turn','R'+d.round+' · '+(d.name||'')+' ('+(d.persona_name||'')+')'); break;
+    case 'agent':
+      qstate.turns.push({n:d.turn,idx:d.agent_idx,name:d.name,object:d.object});
+      qAddCard(d); qLog('agent',(d.name||'')+': + '+(d.object||'')); break;
+    case 'image_pending': qSetComp(true,d.name); qLog('image_pending','compositing object '+d.turn); break;
+    case 'image':
+      qSetComp(false);
+      if(d.image){ if(qstate.viewIndex==null){ qShowImage(d.image); } qAddFrame({n:d.turn,idx:d.agent_idx,label:d.label,object:d.object,image:d.image}); }
+      else if(d.blob){ if(qstate.viewIndex==null){ qAddBlob(d.blob); } qAddFrame({n:d.turn,idx:d.agent_idx,label:d.label,object:d.object,blob:d.blob}); }
+      if(qstate.viewIndex==null){ qSetTag('Latest · turn '+d.turn); }
+      qLog('image','image '+d.turn+' · '+(d.label||'')); break;
+    case 'critic': qRenderCritic(d.evaluation||d); qLog('critic','JUDGE scored the collaboration'); break;
+    case 'final': qSetComp(false); if(d.image&&qstate.viewIndex==null){ qShowImage(d.image); } qSetTag('Final · 4-agent chain'); qLog('final','final canvas presented'); break;
+    case 'warning': qLog('warning',d.message||'warning'); break;
+    case 'summary': qLog('summary','complete · '+(d.turns!=null?d.turns:qstate.turns.length)+' turns · '+(d.elapsed!=null?d.elapsed+'s':'')); break;
+    case 'error': qstate.error=d.message||'error'; qLog('error',qstate.error); break;
+    case 'done':
+      $('qTurnCounter').textContent=qstate.turns.length+' / '+qstate.totalTurns;
+      qActivatePanel(-1);
+      if(qstate.frames.some(function(f){return f.image;})){ $('qDownloadBtn').disabled=false; $('qDownloadBtn').style.opacity='1'; }
+      $('qStopBtn').style.display='none'; qLog('done','session complete'); break;
+  }
+}
+
+function qConnectLive(){
+  qClearTimers(); qstate.error=null;
+  $('qStopBtn').style.display='inline-block'; $('qStopBtn').disabled=false; $('qStopBtn').textContent='Stop ↦';
+  qLog('session','connecting to backend…');
+  fetch('api/quad/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ prompt:qstate.prompt, style:qstate.style, rounds:qstate.rounds, images:true,
+      agents:qstate.agents.map(function(a){ return { name:a.name, persona:a.persona, custom_prompt:a.custom_prompt||'', expertise:a.expertise }; }) })})
+    .then(function(r){ return r.json(); }).then(function(j){
+      if(j.error){ throw new Error(j.error); }
+      qstate.sessionId=j.session_id; qLog('session','session '+j.session_id);
+      qes=new EventSource('api/stream/'+j.session_id);
+      qes.onmessage=function(e){ try{ var ev=JSON.parse(e.data); if(ev&&ev.type){ qHandle(ev.type,ev); if(ev.type==='done'){ qes.close(); } } }catch(_){} };
+      qes.onerror=function(){ qLog('error','stream interrupted'); };
+    }).catch(function(err){ qLog('error','backend error — '+err.message+' · falling back to demo'); qAt(400,qRunDemo); });
+}
+
+var QMOCK_OBJ=['a lone geometric monolith','a neon rain of glyphs','a melting coral spire','a gilded baroque arch',
+  'a fractured comet trail','a shimmer of dappled mist','a mirrored obelisk','a holographic koi'];
+var QMOCK_BLOB=[{x:'30%',y:'55%',size:'60%',c0:'#e8e8ee',c1:'#8a8a99'},{x:'70%',y:'34%',size:'46%',c0:'#ff4d8f',c1:'#3a2f6a'},
+  {x:'48%',y:'70%',size:'54%',c0:'#5fe3b0',c1:'#1f4f4a'},{x:'52%',y:'26%',size:'42%',c0:'#e6c067',c1:'#7a5320'},
+  {x:'24%',y:'40%',size:'40%',c0:'#8ab4ff',c1:'#26306a'},{x:'80%',y:'64%',size:'44%',c0:'#ffd1e8',c1:'#6a3a5a'},
+  {x:'40%',y:'22%',size:'38%',c0:'#cfc9bd',c1:'#5a564d'},{x:'62%',y:'56%',size:'40%',c0:'#a0e0ab',c1:'#1f4f4a'}];
+function qRunDemo(){
+  qClearTimers(); qstate.error=null; qstate.imagesEnabled=false;
+  var meta=qstate.agents.map(function(a,i){ return { name:(a.name||('Agent '+(i+1))),
+    persona_name:(a.custom_prompt?(a.name||'Custom'):qPersonaName(a.persona)), expertise:(a.expertise||'intermediate') }; });
+  var total=qstate.rounds*4;
+  qHandle('session',{ mode:'quad', prompt:qstate.prompt, style:qstate.style, rounds:qstate.rounds, total_turns:total, images:false,
+    agents:meta.map(function(m,i){ return { index:i, name:m.name, persona_name:m.persona_name, expertise:m.expertise }; }) });
+  var t=350, beat=560, turn=0;
+  for(var r=1;r<=qstate.rounds;r++){
+    for(var i=0;i<4;i++){
+      (function(rr,ii){
+        turn++; var n=turn, obj=QMOCK_OBJ[(n-1)%QMOCK_OBJ.length], blob=QMOCK_BLOB[(n-1)%QMOCK_BLOB.length], pm=meta[ii];
+        qAt(t,function(){ qHandle('turn',{turn:n,total:total,round:rr,agent_idx:ii,name:pm.name,persona_name:pm.persona_name,expertise:pm.expertise}); });
+        qAt(t+220,function(){ qHandle('agent',{agent_idx:ii,name:pm.name,turn:n,round:rr,persona_name:pm.persona_name,object:obj,
+          message:{sender:pm.name,sees_on_canvas:'the accumulating canvas',new_object:obj,where:'the composition',palette:['#cbb2d9','#33406a'],reasoning:'a move in the voice of '+pm.persona_name,confidence_score:0.8}}); });
+        qAt(t+400,function(){ qHandle('image_pending',{turn:n,agent_idx:ii,name:pm.name}); });
+        qAt(t+760,function(){ qHandle('image',{turn:n,total:total,round:rr,agent_idx:ii,name:pm.name,object:obj,label:'R'+rr+' - Agent '+(ii+1)+' ('+pm.persona_name+'): '+obj,blob:blob}); });
+        t+=beat;
+      })(r,i);
+    }
+  }
+  qAt(t,function(){ qHandle('turn',{turn:'JUDGE',total:total,agent_idx:null,name:'JUDGE',persona_name:'Critic',expertise:'-'}); });
+  qAt(t+240,function(){ qHandle('critic',{evaluation:QMOCK_CRITIC}); });
+  qAt(t+1600,function(){ qHandle('summary',{turns:total,objects:[],rounds:qstate.rounds,composite:QMOCK_CRITIC.scores.composite,elapsed:(t/1000).toFixed(1)}); });
+  qAt(t+1800,function(){ qHandle('done',{}); });
+}
+
+function qLaunch(){
+  qstate.prompt=($('qPrompt').value||'').trim(); qstate.style=($('qStyle').value||'').trim();
+  if(!qstate.prompt){ qstate.prompt='A lighthouse at the edge of the world'; $('qPrompt').value=qstate.prompt; }
+  qResetStage(); qBuildPanels(null);
+  $('quadConfig').style.display='none'; $('quadHeroLayer').style.display='none'; $('quadStage').style.display='block';
+  if(state.live){ qConnectLive(); } else { qRunDemo(); }
+}
+function qStop(){
+  $('qStopBtn').disabled=true; $('qStopBtn').textContent='Stopping…';
+  if(state.live && qstate.sessionId){ fetch('api/stop/'+qstate.sessionId,{method:'POST'}).catch(function(){}); qLog('control','stop requested — presenting work so far'); }
+  else { qClearTimers(); qLog('control','stopped — presenting work so far'); qHandle('summary',{turns:qstate.turns.length,elapsed:0}); qHandle('done',{}); }
+}
+
+$('toQuad').onclick=function(){ setAppMode('quad'); };
+$('toDual').onclick=function(){ setAppMode('dual'); };
+$('qBack').onclick=function(){ setAppMode('dual'); };
+$('qRoundsUp').onclick=function(){ qSetRounds(qstate.rounds+1); };
+$('qRoundsDown').onclick=function(){ qSetRounds(qstate.rounds-1); };
+$('qLaunch').onclick=qLaunch;
+$('qStopBtn').onclick=qStop;
+$('qNewBtn').onclick=function(){ qClearTimers(); if(qes){ qes.close(); qes=null; } $('quadStage').style.display='none'; $('quadConfig').style.display='block'; $('quadHeroLayer').style.display='block'; };
+$('qDownloadBtn').onclick=qDownloadAll;
+$('qViewLatest').onclick=qViewLatest;
+$('qBriefWrap').onclick=function(){ $('qBriefModal').style.display='flex'; };
+$('qModalClose').onclick=function(){ $('qBriefModal').style.display='none'; };
+$('qBriefModal').onclick=function(e){ if(e.target===this){ this.style.display='none'; } };
+$('qJudgeDownload').onclick=qDownloadAll;
+$('qJudgeNew').onclick=function(){ qClearTimers(); if(qes){ qes.close(); qes=null; } $('quadStage').style.display='none'; $('quadConfig').style.display='block'; $('quadHeroLayer').style.display='block'; };
+qSetRounds(1);
 
 // ---------- init ----------
 function init(){
