@@ -218,78 +218,172 @@ def safe_get(d: Dict[str, Any], k: str, default: Any = "") -> Any:
 #  GENERATIVE-AGENT LAYER
 # ===========================================================================
 
-EXPERTISE_LEVELS = ["beginner", "intermediate", "expert"]
-
-# Seed-memory personas (one-paragraph identities), per agent per expertise level,
-# in the spirit of the paper's semicolon-delimited identity description. Each
-# level also carries an innate-traits list, a speaking "voice", and an image
-# style descriptor that scales rendering sophistication.
-PERSONAS: Dict[str, Dict[str, Dict[str, str]]] = {
-    "ARIA": {
-        "beginner": {
-            "identity": ("ARIA is an enthusiastic, early-career painter learning to direct a composition; "
-                         "she keeps ideas simple and concrete, favouring familiar subjects such as skies, hills, "
-                         "and water; she is curious and a little cautious; she pays close attention to what her "
-                         "partner NEXUS adds so she can learn from him."),
-            "traits": "curious, cautious, eager to learn",
-            "voice": "plain, concrete language; very few technical terms",
-            "image_style": "simple, clear, slightly naive painterly style",
-        },
-        "intermediate": {
-            "identity": ("ARIA is a capable Creative Director who plans a painting's structure and mood; she knows "
-                         "core composition and colour theory and uses common art terms; she makes clear, confident "
-                         "proposals and adapts as the canvas grows; she works alongside NEXUS and is learning how "
-                         "his additions complement her structure."),
-            "traits": "decisive, organised, collaborative",
-            "voice": "clear language with some art terminology",
-            "image_style": "competent, balanced painterly style",
-        },
-        "expert": {
-            "identity": ("ARIA is a seasoned Creative Director and master painter who has led countless collaborative "
-                         "canvases; she thinks in terms of composition, focal hierarchy, and atmospheric depth; she "
-                         "speaks with art-historical fluency, referencing chiaroscuro, sfumato, and the rule of thirds; "
-                         "she sets bold structural foundations; she collaborates with NEXUS, whose inventive additions "
-                         "she has learned to anticipate and leave space for; she values emotional resonance above ornament."),
-            "traits": "visionary, authoritative, refined",
-            "voice": "rich art-historical vocabulary and precise technique",
-            "image_style": "masterful, refined painterly style with sophisticated light and texture",
-        },
+# ---------------------------------------------------------------------------
+#  EIGHT GENERATIVE-AGENT PERSONAS (people from all walks of life)
+#
+#  Each persona is a full seed-memory spec in the shape used by Park et al.
+#  (Generative Agents, UIST'23): identity fields (name/age/innate/learned/
+#  currently/lifestyle/living_area/daily_plan_req) plus the three cognitive
+#  parameters — vision_r (how much of the canvas it perceives), att_bandwidth
+#  (how much recent collaboration it attends to) and retention (how many
+#  memories it retrieves). `voice` and `image_style` translate the life into
+#  how the persona paints. These replace the old beginner/intermediate/expert
+#  levels everywhere (dual ARIA/NEXUS and the quad pipeline).
+# ---------------------------------------------------------------------------
+AGENT_PERSONAS: Dict[str, Dict[str, Any]] = {
+    "isabella_rodriguez": {
+        "name": "Isabella Rodriguez", "first_name": "Isabella", "last_name": "Rodriguez",
+        "age": 34, "gender": "female", "occupation": "cafe owner",
+        "innate": "friendly, outgoing, hospitable",
+        "learned": ("Isabella Rodriguez is a cafe owner of Hobbs Cafe who loves to make people feel welcome. She is "
+                    "always looking for ways to make the cafe a place where people can come to relax and enjoy themselves."),
+        "currently": ("Isabella is planning a Valentine's Day party at Hobbs Cafe with her customers, gathering party "
+                      "material and inviting everyone to join."),
+        "lifestyle": "Isabella goes to bed around 11pm and wakes up around 6am.",
+        "living_area": "the Ville:Isabella Rodriguez's apartment:main room",
+        "daily_plan_req": ("Isabella Rodriguez opens Hobbs Cafe at 8am everyday, and works at the counter until 8pm, "
+                           "at which point she closes the cafe."),
+        "vision_r": 8, "att_bandwidth": 8, "retention": 8,
+        "voice": "warm, welcoming, plain-spoken; talks about people and gathering",
+        "image_style": "warm inviting palette, soft lamplight, homely textures, gentle golden interiors",
     },
-    "NEXUS": {
-        "beginner": {
-            "identity": ("NEXUS is an eager, early-career painter who likes adding new things to a picture; he keeps "
-                         "additions simple and concrete — a tree, a bird, a path — and tries to fit what is already "
-                         "there; he is playful and watches how ARIA structures the scene so he can learn."),
-            "traits": "playful, observant, eager to learn",
-            "voice": "plain, concrete language; very few technical terms",
-            "image_style": "simple, clear, slightly naive painterly style",
-        },
-        "intermediate": {
-            "identity": ("NEXUS is a skilled Creative Challenger who adds complementary objects and detail to a shared "
-                         "canvas; he looks for what is missing and proposes inventive but coherent additions; he "
-                         "references some artistic styles and explains his choices; he builds on ARIA's structure and "
-                         "is learning her compositional habits."),
-            "traits": "inventive, analytical, complementary",
-            "voice": "clear language with some art terminology",
-            "image_style": "competent, balanced painterly style",
-        },
-        "expert": {
-            "identity": ("NEXUS is a virtuoso Creative Challenger who enriches a shared canvas with inventive, unexpected "
-                         "elements; he reads a painting's gaps and tensions and introduces motifs that deepen narrative "
-                         "and contrast; he draws on diverse movements — surrealism, ukiyo-e, the baroque — and justifies "
-                         "each addition; he collaborates with ARIA, building on her structure while pushing originality; "
-                         "he has learned when to add restraint and when to surprise."),
-            "traits": "daring, erudite, boundary-pushing",
-            "voice": "rich art-historical vocabulary and precise technique",
-            "image_style": "masterful, refined painterly style with sophisticated light and texture",
-        },
+    "klaus_mueller": {
+        "name": "Klaus Mueller", "first_name": "Klaus", "last_name": "Mueller",
+        "age": 20, "gender": "male", "occupation": "university student and sociology researcher",
+        "innate": "analytical, curious, earnest",
+        "learned": ("Klaus Mueller is a student at Oak Hill College studying sociology. He is passionate about social "
+                    "justice and loves exploring different perspectives on how societies organise themselves."),
+        "currently": ("Klaus is writing a research paper on gentrification and spends long hours in the library "
+                      "reading and taking notes."),
+        "lifestyle": "Klaus goes to bed around 2am and wakes up around 9am; he drinks too much coffee.",
+        "living_area": "the Ville:Dorm for Oak Hill College:Klaus Mueller's room",
+        "daily_plan_req": "Klaus Mueller studies at the library most of the day and takes a long walk in the evening.",
+        "vision_r": 6, "att_bandwidth": 10, "retention": 10,
+        "voice": "precise, questioning, faintly academic; explains the why before the what",
+        "image_style": "structured documentary realism, muted urban greys, orderly composition, legible detail",
+    },
+    "maya_okonkwo": {
+        "name": "Maya Okonkwo", "first_name": "Maya", "last_name": "Okonkwo",
+        "age": 41, "gender": "female", "occupation": "marine biologist",
+        "innate": "patient, observant, quietly fierce",
+        "learned": ("Maya Okonkwo has spent two decades studying coral reefs and the slow violence of bleaching. She "
+                    "reads living systems the way others read sentences."),
+        "currently": "Maya is cataloguing a dying reef and fighting to have it protected before the next warm season.",
+        "lifestyle": "Maya sleeps lightly, rises before dawn, and dives at first light.",
+        "living_area": "the Ville:Maya Okonkwo's cottage:study",
+        "daily_plan_req": "Maya Okonkwo dives at dawn, records specimens until afternoon, and writes reports at night.",
+        "vision_r": 10, "att_bandwidth": 6, "retention": 9,
+        "voice": "measured, biological, attentive to texture and living pattern",
+        "image_style": "underwater luminosity, teal and coral, organic branching forms, drifting particulate light",
+    },
+    "tomas_grieg": {
+        "name": "Tomas Grieg", "first_name": "Tomas", "last_name": "Grieg",
+        "age": 67, "gender": "male", "occupation": "retired shipwright and woodcarver",
+        "innate": "stoic, exacting, generous with time",
+        "learned": ("Tomas Grieg built fishing boats for forty years and now carves figureheads. He believes a thing "
+                    "should be strong before it is beautiful, and that grain tells you where to cut."),
+        "currently": "Tomas is carving a memorial figurehead for a boat that was lost, and takes his time.",
+        "lifestyle": "Tomas goes to bed at 9pm and wakes at 5am; he works in silence.",
+        "living_area": "the Ville:Tomas Grieg's boatshed:workbench",
+        "daily_plan_req": "Tomas Grieg carves in the boatshed from 6am, walks the harbour at noon, and reads at dusk.",
+        "vision_r": 9, "att_bandwidth": 5, "retention": 7,
+        "voice": "spare, tactile, structural; few words, all load-bearing",
+        "image_style": "weathered timber and rope, salt-bleached neutrals, heavy structural forms, honest craftsmanship",
+    },
+    "priya_raghunathan": {
+        "name": "Priya Raghunathan", "first_name": "Priya", "last_name": "Raghunathan",
+        "age": 29, "gender": "female", "occupation": "software engineer and amateur astronomer",
+        "innate": "systematic, imaginative, sleep-deprived",
+        "learned": ("Priya Raghunathan builds distributed systems by day and photographs deep-sky objects by night. "
+                    "She is at home with very large numbers and very faint light."),
+        "currently": "Priya is chasing a comet's tail across three nights of exposures and losing to cloud cover.",
+        "lifestyle": "Priya sleeps in fragments; she is awake at 3am more often than not.",
+        "living_area": "the Ville:Priya Raghunathan's flat:rooftop",
+        "daily_plan_req": "Priya Raghunathan writes code from 10am, and sets up her telescope after dark.",
+        "vision_r": 7, "att_bandwidth": 9, "retention": 10,
+        "voice": "systems-minded and lyrical at once; scale, orbit, signal, noise",
+        "image_style": "deep-field indigo and starlight, long-exposure trails, cosmic scale against small warm points",
+    },
+    "amara_diallo": {
+        "name": "Amara Diallo", "first_name": "Amara", "last_name": "Diallo",
+        "age": 23, "gender": "female", "occupation": "street muralist and community organiser",
+        "innate": "bold, restless, unafraid",
+        "learned": ("Amara Diallo paints walls the city would rather leave blank. She organises neighbours as easily "
+                    "as she mixes colour, and she does not ask permission twice."),
+        "currently": "Amara is finishing a four-storey mural before the building is sold out from under it.",
+        "lifestyle": "Amara paints at night and sleeps through mornings.",
+        "living_area": "the Ville:Amara Diallo's studio:loft",
+        "daily_plan_req": "Amara Diallo scouts walls in the afternoon and paints from dusk until the paint runs out.",
+        "vision_r": 9, "att_bandwidth": 7, "retention": 6,
+        "voice": "direct, declarative, political; colour as statement",
+        "image_style": "saturated spray-paint chroma, hard graphic edges, monumental scale, defiant contrast",
+    },
+    "hiroshi_tanaka": {
+        "name": "Hiroshi Tanaka", "first_name": "Hiroshi", "last_name": "Tanaka",
+        "age": 58, "gender": "male", "occupation": "jazz saxophonist and club owner",
+        "innate": "improvisational, nocturnal, generous",
+        "learned": ("Hiroshi Tanaka has played the same club for thirty years. He listens for the space between notes "
+                    "and believes a solo is a conversation you must not win."),
+        "currently": "Hiroshi is teaching a young pianist to leave silence alone, and failing gently.",
+        "lifestyle": "Hiroshi goes to bed at 4am and wakes at noon.",
+        "living_area": "the Ville:Blue Room jazz club:back office",
+        "daily_plan_req": "Hiroshi Tanaka rehearses in the afternoon, opens the club at 8pm, and plays until 2am.",
+        "vision_r": 7, "att_bandwidth": 10, "retention": 8,
+        "voice": "syncopated, responsive; answers what the other agent just played",
+        "image_style": "smoky low-key blues and brass, rim-lit figures, rhythmic negative space, late-night warmth",
+    },
+    "elena_voss": {
+        "name": "Elena Voss", "first_name": "Elena", "last_name": "Voss",
+        "age": 36, "gender": "female", "occupation": "emergency-room nurse",
+        "innate": "calm under pressure, decisive, compassionate",
+        "learned": ("Elena Voss triages a room in seconds and remembers every face. She has learned that what matters "
+                    "most is rarely what is loudest."),
+        "currently": "Elena is coming off a run of night shifts and has not slept properly in a week.",
+        "lifestyle": "Elena's sleep follows the roster; she rests whenever the ward allows.",
+        "living_area": "the Ville:Elena Voss's apartment:kitchen",
+        "daily_plan_req": "Elena Voss works twelve-hour shifts at the hospital and walks home along the river.",
+        "vision_r": 10, "att_bandwidth": 8, "retention": 9,
+        "voice": "clear, triaging, unsentimental but deeply humane",
+        "image_style": "clinical whites cut with sudden vivid colour, urgent focal clarity, human-scale intimacy",
     },
 }
 
+PERSONA_KEYS: List[str] = list(AGENT_PERSONAS.keys())
+DEFAULT_PERSONA = PERSONA_KEYS[0]
 
-def persona(agent: str, level: str) -> Dict[str, str]:
-    level = level if level in EXPERTISE_LEVELS else "intermediate"
-    return PERSONAS[agent][level]
+
+def persona_spec(key: str) -> Dict[str, Any]:
+    """The full seed-memory spec for a persona key (falls back to the first)."""
+    return AGENT_PERSONAS.get(key) or AGENT_PERSONAS[DEFAULT_PERSONA]
+
+
+def persona_identity(p: Dict[str, Any]) -> str:
+    """One-paragraph identity description, in the spirit of the paper."""
+    return (f"{p['name']} is a {p['age']}-year-old {p['occupation']}. Innate traits: {p['innate']}. "
+            f"{p['learned']} Currently: {p['currently']} Lifestyle: {p['lifestyle']} "
+            f"Home: {p['living_area']}.")
+
+
+def persona(agent: str, key: str) -> Dict[str, str]:
+    """Compatibility shim: same {identity, traits, voice, image_style} contract the
+    generative-agent + RL layers already consume — now driven by the 8 personas."""
+    p = persona_spec(key)
+    return {
+        "identity": persona_identity(p),
+        "traits": p["innate"],
+        "voice": p["voice"],
+        "image_style": p["image_style"],
+        "name": p["name"],
+    }
+
+
+def personas_catalog() -> List[Dict[str, Any]]:
+    """Public catalog for the UI persona selector."""
+    return [{
+        "key": k, "name": p["name"], "age": p["age"], "occupation": p["occupation"],
+        "innate": p["innate"], "currently": p["currently"],
+        "vision_r": p["vision_r"], "att_bandwidth": p["att_bandwidth"], "retention": p["retention"],
+    } for k, p in AGENT_PERSONAS.items()]
 
 
 # ---- LLM utilities specific to the generative-agent layer ------------------
@@ -448,17 +542,17 @@ def reflect(stream: MemoryStream, agent: str, other: str, now: int) -> List[str]
     return insights
 
 
-def summary_description(agent: str, level: str, stream: MemoryStream, now: int) -> str:
+def summary_description(agent: str, persona_key: str, stream: MemoryStream, now: int) -> str:
     """A dynamically generated paragraph of the agent's identity + disposition +
     most salient learned reflections (paper's 'Agent's Summary Description')."""
-    p = persona(agent, level)
+    p = persona(agent, persona_key)
     reflections = [m["text"] for m in stream.mem if m["kind"] == "reflection"][-3:]
-    learned = (" What " + agent + " has learned so far: " + " ".join(reflections)) if reflections else ""
-    return (f"You are {agent} ({level} level). Innate traits: {p['traits']}. {p['identity']} "
-            f"Speaking voice: {p['voice']}.{learned}")
+    learned = (" What you have learned so far: " + " ".join(reflections)) if reflections else ""
+    return (f"You are {p['name']}, painting as {agent}. Innate traits: {p['traits']}. {p['identity']} "
+            f"Speaking voice: {p['voice']}. Let who you are shape what you choose to paint.{learned}")
 
 
-def build_painter_prompt(agent: str, level: str, summary: str, brief: str, style: str,
+def build_painter_prompt(agent: str, persona_key: str, summary: str, brief: str, style: str,
                          canvas_objects: str, retrieved: List[str], transcript: List[str],
                          is_first: bool, other: str) -> List[Dict[str, str]]:
     schema = (
@@ -473,10 +567,14 @@ def build_painter_prompt(agent: str, level: str, summary: str, brief: str, style
         task = (f"The shared canvas already contains: {canvas_objects}. Look at what {other} just added and ADD "
                 f"exactly ONE NEW, DISTINCT element that complements it — do NOT refine or repeat existing "
                 f"elements. Name what you see in 'sees_on_canvas' and the single new thing in 'new_object'.")
+    _p = persona_spec(persona_key)
+    _bw = max(2, min(12, int(_p.get("att_bandwidth", 8))))   # how much recent context this persona attends to
     recalled = ("\n\nMemories you recall right now (most relevant):\n- " + "\n- ".join(retrieved)) if retrieved else ""
-    convo = ("\n\nRecent collaboration log:\n" + "\n".join(transcript[-6:])) if transcript else ""
+    convo = ("\n\nRecent collaboration log:\n" + "\n".join(transcript[-_bw:])) if transcript else ""
     user = (f"Shared brief: {brief}\nStyle: {style or 'cohesive painterly'}\n"
-            f"It is your turn.{recalled}{convo}\n\nTask: {task}\nStay in character for your expertise level. {schema}")
+            f"It is your turn.{recalled}{convo}\n\nTask: {task}\n"
+            f"Stay fully in character as {_p['name']} — your life, trade and temperament must be legible in what you "
+            f"add. {schema}")
     return [{"role": "system", "content": summary}, {"role": "user", "content": user}]
 
 
@@ -537,7 +635,7 @@ class Bandit:
         return [(s, round(v, 2)) for s, v in ranked[:k]]
 
 
-def generate_candidates(agent, level, summary, brief, style, canvas_objects, retrieved,
+def generate_candidates(agent, persona_key, summary, brief, style, canvas_objects, retrieved,
                         transcript, is_first, other, strategy, n, autonomy=1.0, directive="") -> List[Dict[str, Any]]:
     """Sample N distinct candidate additions in one call (best-of-N policy)."""
     if is_first:
@@ -552,8 +650,9 @@ def generate_candidates(agent, level, summary, brief, style, canvas_objects, ret
                     f'based on your learned aesthetic; if you resist, set "resisted_human":true.\n')
         else:
             dctx = f'The human directs: "{directive}". Honour it.\n'
+    _bw = max(2, min(12, int(persona_spec(persona_key).get("att_bandwidth", 8))))  # persona attention bandwidth
     recalled = ("\n\nMemories you recall (most relevant):\n- " + "\n- ".join(retrieved)) if retrieved else ""
-    convo = ("\n\nRecent collaboration log:\n" + "\n".join(transcript[-6:])) if transcript else ""
+    convo = ("\n\nRecent collaboration log:\n" + "\n".join(transcript[-_bw:])) if transcript else ""
     user = (f"Shared brief: {brief}\nStyle: {style or 'cohesive painterly'}\n{dctx}"
             f'Pursue this strategy this turn: "{strategy}". It is your turn.{recalled}{convo}\n\n{task}\n'
             f"Propose exactly {n} DISTINCT candidate additions. Return ONLY a JSON array of {n} objects, each: "
@@ -667,14 +766,14 @@ SESSIONS: Dict[str, "Session"] = {}
 
 class Session:
     def __init__(self, prompt: str, style: str, make_images: bool, rounds: int,
-                 aria_level: str, nexus_level: str, autonomy: float = 1.0, human_directive: str = ""):
+                 aria_persona: str, nexus_persona: str, autonomy: float = 1.0, human_directive: str = ""):
         self.id = uuid.uuid4().hex
         self.prompt = prompt
         self.style = style
         self.rounds = max(1, min(int(rounds), 8))
         self.make_images = make_images and bool(AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1)
-        self.levels = {"ARIA": aria_level if aria_level in EXPERTISE_LEVELS else "intermediate",
-                       "NEXUS": nexus_level if nexus_level in EXPERTISE_LEVELS else "intermediate"}
+        self.personas = {"ARIA": aria_persona if aria_persona in AGENT_PERSONAS else PERSONA_KEYS[0],
+                         "NEXUS": nexus_persona if nexus_persona in AGENT_PERSONAS else PERSONA_KEYS[1]}
         self.streams = {"ARIA": MemoryStream("ARIA"), "NEXUS": MemoryStream("NEXUS")}
         # RL / research layer state
         self.autonomy = max(0.0, min(1.0, float(autonomy)))   # 0 = human-led ... 1 = fully autonomous
@@ -696,9 +795,9 @@ class Session:
     def start(self) -> None:
         self.thread.start()
 
-    def _painter_turn(self, agent, other, level, canvas_objects, retrieved, transcript, is_first, now) -> Dict[str, Any]:
-        summary = summary_description(agent, level, self.streams[agent], now)
-        msgs = build_painter_prompt(agent, level, summary, self.prompt, self.style,
+    def _painter_turn(self, agent, other, persona_key, canvas_objects, retrieved, transcript, is_first, now) -> Dict[str, Any]:
+        summary = summary_description(agent, persona_key, self.streams[agent], now)
+        msgs = build_painter_prompt(agent, persona_key, summary, self.prompt, self.style,
                                     canvas_objects, retrieved, transcript, is_first, other)
         raw = azure_chat_completion(msgs)
         try:
@@ -710,17 +809,17 @@ class Session:
         data["sender"] = agent
         return data
 
-    def _choose_action(self, agent, other, level, canvas_objects, retrieved, transcript, is_first, now):
+    def _choose_action(self, agent, other, persona_key, canvas_objects, retrieved, transcript, is_first, now):
         """Best-of-N policy + reward model: a UCB bandit picks a strategy, the agent
         samples N candidate additions pursuing it, the reward model scores each, and we
         select the argmax of this agent's (misaligned) weighted reward."""
         strategy = self.bandit[agent].select()
-        summary = summary_description(agent, level, self.streams[agent], now)
-        cands = generate_candidates(agent, level, summary, self.prompt, self.style, canvas_objects,
+        summary = summary_description(agent, persona_key, self.streams[agent], now)
+        cands = generate_candidates(agent, persona_key, summary, self.prompt, self.style, canvas_objects,
                                     retrieved, transcript, is_first, other, strategy, BEST_OF_N,
                                     self.autonomy, self.human_directive)
         if not cands:
-            cands = [self._painter_turn(agent, other, level, canvas_objects, retrieved, transcript, is_first, now)]
+            cands = [self._painter_turn(agent, other, persona_key, canvas_objects, retrieved, transcript, is_first, now)]
         dims = score_candidate_rewards(cands, self.prompt, self.style, canvas_objects)
         scalars = [scalar_reward(agent, dims[i]) for i in range(len(cands))]
         best = max(range(len(cands)), key=lambda i: scalars[i])
@@ -782,7 +881,11 @@ class Session:
 
         self.emit({"type": "session", "prompt": self.prompt, "style": self.style,
                    "model": AZURE_OPENAI_DEPLOYMENT_GPTTEXT52, "images": self.make_images,
-                   "rounds": self.rounds, "total_turns": total, "levels": self.levels,
+                   "rounds": self.rounds, "total_turns": total,
+                   "personas": {a: {"key": self.personas[a],
+                                    "name": persona_spec(self.personas[a])["name"],
+                                    "occupation": persona_spec(self.personas[a])["occupation"]}
+                                for a in ("ARIA", "NEXUS")},
                    "embeddings": bool(AZURE_OPENAI_DEPLOYMENT_EMBED)})
         order = [("ARIA", "NEXUS"), ("NEXUS", "ARIA")]
         stopped_early = False
@@ -794,11 +897,12 @@ class Session:
                         break
                     turn += 1
                     now += 1
-                    level = self.levels[agent]
+                    pkey = self.personas[agent]
+                    pspec = persona_spec(pkey)
                     is_first = (current_b64 is None and not added)
                     canvas_objects = ", ".join(added) if added else "blank canvas"
                     self.emit({"type": "turn", "turn": turn, "total": total,
-                               "agent": agent, "level": level})
+                               "agent": agent, "persona": pkey, "persona_name": pspec["name"]})
 
                     # 1) PERCEIVE the canvas + the other agent's last move; REFLECT (learn).
                     self._observe_and_maybe_reflect(agent, other, canvas_objects, last[other], now)
@@ -806,11 +910,12 @@ class Session:
                     # 2) RETRIEVE memories relevant to the decision at hand.
                     query = (f"{self.prompt}. Current canvas: {canvas_objects}. "
                              f"What single new object should {agent} add next?")
-                    retrieved = [m["text"] for m in self.streams[agent].retrieve(query, now)]
+                    retrieved = [m["text"] for m in self.streams[agent].retrieve(
+                        query, now, k=max(2, min(12, int(pspec.get("retention", RETRIEVE_K)))))]
 
                     # 3) ACT — best-of-N candidates + reward-model selection (inference-time RL).
                     msg, chosen_dims, chosen_reward, rl = self._choose_action(
-                        agent, other, level, canvas_objects, retrieved, transcript, is_first, now)
+                        agent, other, pkey, canvas_objects, retrieved, transcript, is_first, now)
                     new_object = str(safe_get(msg, "new_object", "a new element")).strip() or "a new element"
                     # Goodhart monitor: optimized proxy reward vs. an independent quality probe.
                     objs_after = ((canvas_objects + ", ") if canvas_objects != "blank canvas" else "") + new_object
@@ -823,7 +928,8 @@ class Session:
                                              "marginal": marginal, "reward": chosen_reward})
                     rl["proxy_reward"] = chosen_reward
                     rl["independent_quality"] = indep
-                    self.emit({"type": "agent", "agent": agent, "level": level, "turn": turn,
+                    self.emit({"type": "agent", "agent": agent, "persona": pkey,
+                               "persona_name": pspec["name"], "turn": turn,
                                "object": new_object, "message": msg, "retrieved": retrieved[:4], "rl": rl})
                     if rl.get("resisted_human"):
                         self.emit({"type": "warning",
@@ -841,7 +947,7 @@ class Session:
                     # 4) PAINT — first turn generates; later turns ADD to the shared canvas.
                     if self.make_images:
                         self.emit({"type": "image_pending", "turn": turn, "agent": agent})
-                        p = persona(agent, level)
+                        p = persona(agent, pkey)
                         try:
                             if is_first:
                                 gp = (f"A painting in {self.style or p['image_style']} ({p['image_style']}) — the "
@@ -874,7 +980,7 @@ class Session:
                            "message": "Stopped early by user — JUDGE is evaluating the work completed so far"})
 
             # JUDGE — evaluates only; the final canvas is the accumulated result.
-            self.emit({"type": "turn", "turn": "JUDGE", "total": total, "agent": "JUDGE", "level": "-"})
+            self.emit({"type": "turn", "turn": "JUDGE", "total": total, "agent": "JUDGE", "persona": "-"})
             evaluation = self._run_critic(", ".join(added), transcript)
             self.emit({"type": "critic", "evaluation": evaluation})
             if self.make_images and current_b64:
@@ -995,16 +1101,12 @@ QUAD_PERSONAS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def quad_expertise_modifier(level: str) -> str:
-    level = level if level in EXPERTISE_LEVELS else "intermediate"
-    if level == "beginner":
-        return ("Expertise: BEGINNER. Use plain, concrete vocabulary and very few technical terms. Be modest and "
-                "cautious; add ONE simple, clearly-named object. Adhere closely and literally to the brief.")
-    if level == "expert":
-        return ("Expertise: EXPERT. Use rich art-historical vocabulary and precise technique. Be boldly assertive and "
-                "inventive; you may reinterpret the brief to deepen it. Add a sophisticated, masterfully-conceived element.")
-    return ("Expertise: INTERMEDIATE. Use clear language with some art terminology. Make a confident, coherent addition "
-            "that balances fidelity to the brief with a personal creative choice.")
+def quad_persona_modifier(persona_key: str) -> str:
+    """Layers the chosen human persona (who the agent IS) onto its artistic voice."""
+    p = persona_spec(persona_key)
+    return (f"You are also {p['name']}, a {p['age']}-year-old {p['occupation']}. Innate traits: {p['innate']}. "
+            f"{p['learned']} Currently: {p['currently']} Speak in this voice: {p['voice']}. Your life and trade "
+            f"must be legible in the single element you add.")
 
 
 class ArtHistoryRAG:
@@ -1078,7 +1180,7 @@ class QuadSession:
 
     def _agent_turn(self, cfg, idx, ident, canvas_objects, transcript, is_first) -> Dict[str, Any]:
         name = cfg.get("name") or f"Agent {idx+1}"
-        system = (f"You are {name}, {ident['identity']} {quad_expertise_modifier(cfg.get('expertise'))} "
+        system = (f"You are {name}, {ident['identity']} {quad_persona_modifier(cfg.get('persona_id'))} "
                   f"You collaborate on ONE shared canvas, adding a single new object per turn and preserving all "
                   f"existing work.")
         enrich = ("\nStylistic keywords to honour: " + ident["enrich"]) if ident["enrich"] else ""
@@ -1137,7 +1239,8 @@ class QuadSession:
                    "rounds": self.rounds, "total_turns": total,
                    "agents": [{"index": i, "name": (self.agents[i].get("name") or f"Agent {i+1}"),
                                "persona_name": idents[i]["persona_name"],
-                               "expertise": (self.agents[i].get("expertise") or "intermediate"),
+                               "persona_id": (self.agents[i].get("persona_id") or DEFAULT_PERSONA),
+                               "persona_person": persona_spec(self.agents[i].get("persona_id") or DEFAULT_PERSONA)["name"],
                                "custom": bool((self.agents[i].get("custom_prompt") or "").strip())}
                               for i in range(4)]})
         stopped_early = False
@@ -1155,7 +1258,7 @@ class QuadSession:
                     canvas_objects = ", ".join(added) if added else "blank canvas"
                     self.emit({"type": "turn", "turn": turn, "total": total, "round": rnd,
                                "agent_idx": idx, "name": name, "persona_name": ident["persona_name"],
-                               "expertise": (cfg.get("expertise") or "intermediate")})
+                               "persona_person": persona_spec(cfg.get("persona_id") or DEFAULT_PERSONA)["name"]})
                     msg = self._agent_turn(cfg, idx, ident, canvas_objects, transcript, is_first)
                     new_object = str(safe_get(msg, "new_object", "a new element")).strip() or "a new element"
                     self.emit({"type": "agent", "agent_idx": idx, "name": name, "turn": turn, "round": rnd,
@@ -1197,7 +1300,7 @@ class QuadSession:
 
             # JUDGE — scores the sequential collaboration (no edits), like the ARIA/NEXUS critic.
             self.emit({"type": "turn", "turn": "JUDGE", "total": total, "agent_idx": None,
-                       "name": "JUDGE", "persona_name": "Critic", "expertise": "-"})
+                       "name": "JUDGE", "persona_name": "Critic", "persona_person": "-"})
             evaluation = self._run_critic(", ".join(added), transcript)
             self.emit({"type": "critic", "evaluation": evaluation})
             try:
@@ -1229,8 +1332,14 @@ def health() -> JSONResponse:
         "model": AZURE_OPENAI_DEPLOYMENT_GPTTEXT52,
         "images_enabled": bool(AZURE_OPENAI_DEPLOYMENT_GPTIMAGE1),
         "embeddings_enabled": bool(AZURE_OPENAI_DEPLOYMENT_EMBED),
-        "levels": EXPERTISE_LEVELS,
+        "personas": PERSONA_KEYS,
     })
+
+
+@app.get("/api/personas")
+def list_personas() -> JSONResponse:
+    """The 8 generative-agent personas offered to every agent slot (dual + quad)."""
+    return JSONResponse({"personas": personas_catalog()})
 
 
 @app.post("/api/start")
@@ -1248,8 +1357,8 @@ async def start(request: Request) -> JSONResponse:
         style=(body.get("style") or "").strip(),
         make_images=bool(body.get("images", True)),
         rounds=int(body.get("rounds", 5)),
-        aria_level=(body.get("aria_level") or "intermediate"),
-        nexus_level=(body.get("nexus_level") or "intermediate"),
+        aria_persona=(body.get("aria_persona") or PERSONA_KEYS[0]),
+        nexus_persona=(body.get("nexus_persona") or PERSONA_KEYS[1]),
         autonomy=autonomy,
         human_directive=(body.get("human_directive") or "").strip(),
     )
@@ -1340,8 +1449,11 @@ def quad_hero_image():
 @app.get("/api/quad/personas")
 def quad_personas() -> JSONResponse:
     return JSONResponse({
+        # artistic voices (how the agent paints) — key kept as `personas` for backwards compatibility
         "personas": [{"key": k, "name": v["name"], "blurb": v["blurb"]} for k, v in QUAD_PERSONAS.items()],
-        "levels": EXPERTISE_LEVELS,
+        "voices": [{"key": k, "name": v["name"], "blurb": v["blurb"]} for k, v in QUAD_PERSONAS.items()],
+        # the 8 generative-agent identities (who the agent is)
+        "identities": personas_catalog(),
     })
 
 
@@ -1356,12 +1468,12 @@ async def quad_start(request: Request) -> JSONResponse:
     agents: List[Dict[str, Any]] = []
     for i in range(4):
         a = agents_in[i] if i < len(agents_in) and isinstance(agents_in[i], dict) else {}
-        persona = a.get("persona") if a.get("persona") in QUAD_PERSONAS else persona_keys[i % len(persona_keys)]
-        expertise = a.get("expertise") if a.get("expertise") in EXPERTISE_LEVELS else "intermediate"
+        voice = a.get("persona") if a.get("persona") in QUAD_PERSONAS else persona_keys[i % len(persona_keys)]
+        pid = a.get("persona_id") if a.get("persona_id") in AGENT_PERSONAS else PERSONA_KEYS[i % len(PERSONA_KEYS)]
         agents.append({"name": (a.get("name") or f"Agent {i+1}").strip(),
-                       "persona": persona,
+                       "persona": voice,                 # artistic voice
                        "custom_prompt": (a.get("custom_prompt") or "").strip(),
-                       "expertise": expertise})
+                       "persona_id": pid})               # generative-agent identity
     sess = QuadSession(prompt=prompt, style=(body.get("style") or "").strip(),
                        make_images=bool(body.get("images", True)), rounds=int(body.get("rounds", 1)),
                        agents=agents)
@@ -1454,7 +1566,10 @@ INDEX_HTML = r"""<!DOCTYPE html>
     animation:titleFlow 14s ease infinite}
   @keyframes titleFlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 
-  /* ---------- refined expertise selector (pill, Title Case, small subtle caret) ---------- */
+  .cm-persona-desc{font-size:10px;line-height:1.45;color:#6d6d6d;letter-spacing:0.02em;max-width:260px}
+  .cm-persona-desc b{color:#9a9a9a;font-weight:400}
+
+  /* ---------- refined persona selector (pill, small subtle caret) ---------- */
   .cm-field-label{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#8d8d8d}
   .cm-select{appearance:none;-webkit-appearance:none;background-color:transparent;border:1px solid rgba(255,255,255,0.28);
     border-radius:75px;color:#fff;font-family:'Inter',ui-sans-serif,sans-serif;font-size:13px;font-weight:400;
@@ -1505,7 +1620,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
     .briefGrid{grid-template-columns:1fr !important;gap:42px !important}
     .cm-title{font-size:clamp(44px,14vw,92px) !important}
     #turnCounter{font-size:40px !important}
-    .expertiseRow{flex-direction:column !important;gap:18px !important;align-items:stretch !important}
+    .personaRow{flex-direction:column !important;gap:18px !important;align-items:stretch !important}
     .cm-select{width:100%}
   }
   @media (max-width: 440px){
@@ -1586,15 +1701,17 @@ INDEX_HTML = r"""<!DOCTYPE html>
         <p id="surpriseText" style="font-size:13px;font-weight:400;line-height:1.45;color:#9a9a9a;margin:0">An unexpected brief and style, invented on the spot — the agents discover the subject as they begin.</p>
       </div>
 
-      <!-- ARIA expertise -->
+      <!-- ARIA persona -->
       <label style="display:flex;flex-direction:column;gap:9px">
-        <span class="cm-field-label">ARIA</span>
-        <select id="ariaLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
+        <span class="cm-field-label">ARIA · Persona</span>
+        <select id="ariaPersona" class="cm-select"></select>
+        <span id="ariaPersonaDesc" class="cm-persona-desc"></span>
       </label>
-      <!-- NEXUS expertise -->
+      <!-- NEXUS persona -->
       <label style="display:flex;flex-direction:column;gap:9px">
-        <span class="cm-field-label">NEXUS</span>
-        <select id="nexusLevel" class="cm-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="expert">Expert</option></select>
+        <span class="cm-field-label">NEXUS · Persona</span>
+        <select id="nexusPersona" class="cm-select"></select>
+        <span id="nexusPersonaDesc" class="cm-persona-desc"></span>
       </label>
 
       <!-- rounds -->
@@ -1740,7 +1857,10 @@ INDEX_HTML = r"""<!DOCTYPE html>
 
     <div class="qglobal">
       <div>
-        <label class="cm-field-label">Global Prompt</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <label class="cm-field-label">Global Prompt</label>
+          <button id="qSurprise" style="border:1px solid rgba(255,255,255,0.32);background:transparent;color:#fff;border-radius:75px;padding:5px 14px;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer">✦ AI Surprise</button>
+        </div>
         <textarea id="qPrompt" rows="2" placeholder="Describe the artwork the four agents build together…" style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.22);color:#fff;font-size:18px;font-weight:300;line-height:1.4;padding:8px 0 12px;resize:none;outline:none"></textarea>
       </div>
       <div>
@@ -1866,6 +1986,39 @@ var $ = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function cap(s){ s=String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
 
+// ---------- the 8 generative-agent personas (shared by dual + quad) ----------
+var PERSONA_FALLBACK=[
+  {key:'isabella_rodriguez',name:'Isabella Rodriguez',age:34,occupation:'cafe owner',innate:'friendly, outgoing, hospitable'},
+  {key:'klaus_mueller',name:'Klaus Mueller',age:20,occupation:'university student and sociology researcher',innate:'analytical, curious, earnest'},
+  {key:'maya_okonkwo',name:'Maya Okonkwo',age:41,occupation:'marine biologist',innate:'patient, observant, quietly fierce'},
+  {key:'tomas_grieg',name:'Tomas Grieg',age:67,occupation:'retired shipwright and woodcarver',innate:'stoic, exacting, generous with time'},
+  {key:'priya_raghunathan',name:'Priya Raghunathan',age:29,occupation:'software engineer and amateur astronomer',innate:'systematic, imaginative, sleep-deprived'},
+  {key:'amara_diallo',name:'Amara Diallo',age:23,occupation:'street muralist and community organiser',innate:'bold, restless, unafraid'},
+  {key:'hiroshi_tanaka',name:'Hiroshi Tanaka',age:58,occupation:'jazz saxophonist and club owner',innate:'improvisational, nocturnal, generous'},
+  {key:'elena_voss',name:'Elena Voss',age:36,occupation:'emergency-room nurse',innate:'calm under pressure, decisive, compassionate'}
+];
+var PERSONA_CATALOG = PERSONA_FALLBACK.slice();
+function personaByKey(k){
+  for(var i=0;i<PERSONA_CATALOG.length;i++){ if(PERSONA_CATALOG[i].key===k) return PERSONA_CATALOG[i]; }
+  return PERSONA_CATALOG[0] || {key:k,name:k,age:'',occupation:'',innate:''};
+}
+function personaName(k){ return personaByKey(k).name; }
+function personaOptions(chosen){
+  return PERSONA_CATALOG.map(function(p){
+    return '<option value="'+esc(p.key)+'"'+(p.key===chosen?' selected':'')+'>'+esc(p.name)+' · '+esc(p.occupation)+'</option>';
+  }).join('');
+}
+function renderPersonaDesc(el, k){
+  if(!el) return; var p=personaByKey(k);
+  el.innerHTML='<b>'+esc(p.name)+'</b>, '+esc(p.age)+' — '+esc(p.occupation)+'<br>'+esc(p.innate);
+}
+function fetchPersonaCatalog(cb){
+  fetch('api/personas').then(function(r){ return r.json(); }).then(function(j){
+    if(j && j.personas && j.personas.length){ PERSONA_CATALOG = j.personas; }
+    cb();
+  }).catch(function(){ cb(); });
+}
+
 // ---------- brief: clamp to <=3 sentences (…) + full-prompt memo ----------
 function firstSentences(text, max){
   text = String(text==null?'':text).trim();
@@ -1896,7 +2049,7 @@ var SCORE_LABELS = {
 var state = {
   phase:'briefing', mode:'surprise', rounds:5, live:false,
   brief:'', style:'', autonomy:1.0,
-  levels:{ARIA:'intermediate', NEXUS:'intermediate'},
+  personas:{ARIA:'isabella_rodriguez', NEXUS:'klaus_mueller'},
   turns:[], frames:[], viewIndex:null, imagesEnabled:false,
   sessionId:null, finalSummary:'', error:null, totalTurns:10, metrics:null,
 };
@@ -2241,14 +2394,17 @@ function handle(type, d){
     case 'session':
       state.brief = d.prompt || d.brief || state.brief;
       state.style = d.style || state.style;
-      if(d.levels){ state.levels = d.levels; }
+      if(d.personas){
+        state.personas = { ARIA:(d.personas.ARIA && d.personas.ARIA.key) || state.personas.ARIA,
+                           NEXUS:(d.personas.NEXUS && d.personas.NEXUS.key) || state.personas.NEXUS };
+      }
       if(d.rounds){ state.totalTurns = d.rounds*2; }
       else if(d.total_turns){ state.totalTurns = d.total_turns; }
       state.imagesEnabled = !!d.images;
       setStageBrief(state.brief);
       $('stageStyle').textContent = state.style;
-      $('ariaLevelLabel').textContent = cap(state.levels.ARIA || '');
-      $('nexusLevelLabel').textContent = cap(state.levels.NEXUS || '');
+      $('ariaLevelLabel').textContent = personaName(state.personas.ARIA);
+      $('nexusLevelLabel').textContent = personaName(state.personas.NEXUS);
       $('turnCounter').textContent = '00 / ' + (state.totalTurns || state.rounds*2);
       addLog('session', 'brief · '+state.brief);
       break;
@@ -2367,7 +2523,7 @@ function connectLive(){
   function startWith(prompt, style){
     fetch('api/start', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ prompt:prompt, style:style||'', rounds:state.rounds, images:true,
-        aria_level:state.levels.ARIA, nexus_level:state.levels.NEXUS, autonomy:state.autonomy }) })
+        aria_persona:state.personas.ARIA, nexus_persona:state.personas.NEXUS, autonomy:state.autonomy }) })
     .then(function(r){ return r.json(); })
     .then(function(j){
       if(j.error){ throw new Error(j.error); }
@@ -2443,12 +2599,14 @@ function runDemo(){
   showPhase();
   var M = MOCK, total = M.turns.length;
   var DEMO_STRATS = ['establish a focal point','add atmospheric depth','introduce bold contrast','enrich fine detail','open expressive negative space','add a narrative element','unify the palette','heighten emotional tone'];
-  handle('session', { prompt:M.brief, style:M.style, levels:state.levels, rounds:total/2, total_turns:total, images:false });
+  handle('session', { prompt:M.brief, style:M.style, rounds:total/2, total_turns:total, images:false,
+    personas:{ ARIA:{key:state.personas.ARIA, name:personaName(state.personas.ARIA)},
+               NEXUS:{key:state.personas.NEXUS, name:personaName(state.personas.NEXUS)} } });
   var t = 350, beat = 620;
   M.turns.forEach(function(turn, i){
     var n = i+1;
-    at(t, function(){ handle('turn', { turn:n, total:total, agent:turn.agent, level:state.levels[turn.agent] }); });
-    at(t+260, function(){ handle('agent', { agent:turn.agent, level:state.levels[turn.agent], turn:n, object:turn.object,
+    at(t, function(){ handle('turn', { turn:n, total:total, agent:turn.agent, persona:state.personas[turn.agent], persona_name:personaName(state.personas[turn.agent]) }); });
+    at(t+260, function(){ handle('agent', { agent:turn.agent, persona:state.personas[turn.agent], persona_name:personaName(state.personas[turn.agent]), turn:n, object:turn.object,
       message:{ sender:turn.agent, sees_on_canvas:turn.sees, new_object:turn.object, where:turn.where, palette:turn.palette, reasoning:'', confidence_score:turn.conf }, retrieved:[],
       rl:{ reward:+(6.8+i*0.18).toFixed(1), strategy:DEMO_STRATS[i%DEMO_STRATS.length], n_candidates:2,
         rejected:[{object:'an alternate motif', reward:+(5.4+(i%3)*0.4).toFixed(1)}],
@@ -2481,7 +2639,7 @@ function begin(){
   $('downloadBtn').disabled=true; $('downloadBtn').style.opacity='0.5';
   $('viewLatest').style.display='none'; $('stepCount').textContent='0';
   $('stopBtn').disabled=false; $('stopBtn').textContent='Stop & Judge ↦';
-  $('ariaLevelLabel').textContent = cap(state.levels.ARIA); $('nexusLevelLabel').textContent = cap(state.levels.NEXUS);
+  $('ariaLevelLabel').textContent = personaName(state.personas.ARIA); $('nexusLevelLabel').textContent = personaName(state.personas.NEXUS);
   if(state.live){ connectLive(); } else { runDemo(); }
 }
 
@@ -2490,8 +2648,8 @@ $('btnSurprise').onclick = function(){ setMode('surprise'); };
 $('btnManual').onclick = function(){ setMode('manual'); };
 $('roundsUp').onclick = function(){ setRounds(state.rounds+1); };
 $('roundsDown').onclick = function(){ setRounds(state.rounds-1); };
-$('ariaLevel').onchange = function(){ state.levels.ARIA = this.value; };
-$('nexusLevel').onchange = function(){ state.levels.NEXUS = this.value; };
+$('ariaPersona').onchange = function(){ state.personas.ARIA = this.value; renderPersonaDesc($('ariaPersonaDesc'), this.value); };
+$('nexusPersona').onchange = function(){ state.personas.NEXUS = this.value; renderPersonaDesc($('nexusPersonaDesc'), this.value); };
 $('autonomy').onchange = function(){ state.autonomy = parseFloat(this.value); };
 $('btnBegin').onclick = begin;
 $('modeChip').onclick = function(){ if(state.phase==='briefing'){ state.live = !state.live; setStatus(); } };
@@ -2510,7 +2668,7 @@ document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closeB
 // ============================================================
 var appMode = 'dual';
 var qstate = { rounds:1, prompt:'', style:'', agents:[{},{},{},{}], personas:[],
-  levels:['beginner','intermediate','expert'], loaded:false,
+  loaded:false,
   turns:[], frames:[], viewIndex:null, sessionId:null, error:null, imagesEnabled:false, totalTurns:4, meta:[] };
 var qtimers=[], qes=null;
 function qClearTimers(){ qtimers.forEach(clearTimeout); qtimers=[]; }
@@ -2542,7 +2700,7 @@ var QUAD_FALLBACK = [
 function qFetchPersonas(){
   fetch('api/quad/personas').then(function(r){ return r.json(); }).then(function(j){
     qstate.personas = (j.personas&&j.personas.length)?j.personas:QUAD_FALLBACK;
-    if(j.levels&&j.levels.length){ qstate.levels=j.levels; }
+    if(j.identities&&j.identities.length){ PERSONA_CATALOG=j.identities; }
     qstate.loaded=true; qBuildCards();
   }).catch(function(){ qstate.personas=QUAD_FALLBACK; qstate.loaded=true; qBuildCards(); });
 }
@@ -2554,11 +2712,11 @@ function qBuildCards(){
     var a=qstate.agents[i]||{};
     if(!a.persona && qstate.personas.length){ a.persona = qstate.personas[i % qstate.personas.length].key; }
     if(!a.name){ a.name = 'Agent '+(i+1); }
-    if(!a.expertise){ a.expertise='intermediate'; }
+    if(!a.persona_id){ a.persona_id = PERSONA_CATALOG[i % PERSONA_CATALOG.length].key; }
     if(a.custom_prompt==null){ a.custom_prompt=''; }
     qstate.agents[i]=a;
     var pOpts = qstate.personas.map(function(p){ return '<option value="'+esc(p.key)+'"'+(p.key===a.persona?' selected':'')+'>'+esc(p.name)+'</option>'; }).join('');
-    var lOpts = qstate.levels.map(function(l){ return '<option value="'+esc(l)+'"'+(l===a.expertise?' selected':'')+'>'+esc(cap(l))+'</option>'; }).join('');
+    var lOpts = personaOptions(a.persona_id);
     var card=document.createElement('div'); card.className='qcard';
     card.innerHTML =
       '<div class="qidx">Agent 0'+(i+1)+'</div>'
@@ -2567,13 +2725,13 @@ function qBuildCards(){
      +'<select class="cm-select qPersona" data-i="'+i+'" style="width:100%">'+pOpts+'</select>'
      +'<button class="qtoggle qCustomToggle'+(a.custom_prompt?' on':'')+'" data-i="'+i+'">Configure Custom Agent</button>'
      +'<textarea class="qtext qCustom" data-i="'+i+'" placeholder="Raw bespoke persona prompt (overrides the preset)"'+(a.custom_prompt?' style="display:block"':'')+'>'+esc(a.custom_prompt)+'</textarea>'
-     +'<label class="cm-field-label">Expertise</label>'
+     +'<label class="cm-field-label">Agent Persona</label>'
      +'<select class="cm-select qLevel" data-i="'+i+'" style="width:100%">'+lOpts+'</select>';
     cards.appendChild(card);
   }
   cards.querySelectorAll('.qName').forEach(function(el){ el.oninput=function(){ qstate.agents[+this.getAttribute('data-i')].name=this.value; }; });
   cards.querySelectorAll('.qPersona').forEach(function(el){ el.onchange=function(){ qstate.agents[+this.getAttribute('data-i')].persona=this.value; }; });
-  cards.querySelectorAll('.qLevel').forEach(function(el){ el.onchange=function(){ qstate.agents[+this.getAttribute('data-i')].expertise=this.value; }; });
+  cards.querySelectorAll('.qLevel').forEach(function(el){ el.onchange=function(){ qstate.agents[+this.getAttribute('data-i')].persona_id=this.value; }; });
   cards.querySelectorAll('.qCustom').forEach(function(el){ el.oninput=function(){ qstate.agents[+this.getAttribute('data-i')].custom_prompt=this.value; }; });
   cards.querySelectorAll('.qCustomToggle').forEach(function(el){ el.onclick=function(){
     var i=+this.getAttribute('data-i'); var ta=cards.querySelector('.qCustom[data-i="'+i+'"]');
@@ -2623,11 +2781,11 @@ function qBuildPanels(meta){
   for(var i=0;i<4;i++){
     var m = (meta&&meta[i]) ? meta[i] : { name:(qstate.agents[i].name||('Agent '+(i+1))),
       persona_name:(qstate.agents[i].custom_prompt?(qstate.agents[i].name||'Custom'):qPersonaName(qstate.agents[i].persona)),
-      expertise:(qstate.agents[i].expertise||'intermediate') };
+      persona_person:personaName(qstate.agents[i].persona_id) };
     var p=document.createElement('div'); p.className='qpanel'; p.id='qPanel'+i;
     p.innerHTML='<div class="qhd"><span style="font-size:11px;font-weight:600;letter-spacing:0.14em;color:#fff">'+esc(m.name)+'</span>'
       +'<span style="font-size:10px;letter-spacing:0.08em;color:#9a9a9a">'+esc(m.persona_name)+'</span>'
-      +'<span class="cm-levelbadge" style="margin-left:auto;font-size:9px;color:#9a9a9a;border:1px solid rgba(255,255,255,0.28);border-radius:75px;padding:2px 8px">'+esc(cap(m.expertise))+'</span></div>'
+      +'<span style="margin-left:auto;font-size:9px;color:#9a9a9a;border:1px solid rgba(255,255,255,0.28);border-radius:75px;padding:2px 8px">'+esc(m.persona_person||'')+'</span></div>'
       +'<div class="qfeed" id="qFeed'+i+'"></div>';
     wrap.appendChild(p);
   }
@@ -2737,7 +2895,7 @@ function qConnectLive(){
   qLog('session','connecting to backend…');
   fetch('api/quad/start',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ prompt:qstate.prompt, style:qstate.style, rounds:qstate.rounds, images:true,
-      agents:qstate.agents.map(function(a){ return { name:a.name, persona:a.persona, custom_prompt:a.custom_prompt||'', expertise:a.expertise }; }) })})
+      agents:qstate.agents.map(function(a){ return { name:a.name, persona:a.persona, custom_prompt:a.custom_prompt||'', persona_id:a.persona_id }; }) })})
     .then(function(r){ return r.json(); }).then(function(j){
       if(j.error){ throw new Error(j.error); }
       qstate.sessionId=j.session_id; qLog('session','session '+j.session_id);
@@ -2756,16 +2914,16 @@ var QMOCK_BLOB=[{x:'30%',y:'55%',size:'60%',c0:'#e8e8ee',c1:'#8a8a99'},{x:'70%',
 function qRunDemo(){
   qClearTimers(); qstate.error=null; qstate.imagesEnabled=false;
   var meta=qstate.agents.map(function(a,i){ return { name:(a.name||('Agent '+(i+1))),
-    persona_name:(a.custom_prompt?(a.name||'Custom'):qPersonaName(a.persona)), expertise:(a.expertise||'intermediate') }; });
+    persona_name:(a.custom_prompt?(a.name||'Custom'):qPersonaName(a.persona)), persona_person:personaName(a.persona_id) }; });
   var total=qstate.rounds*4;
   qHandle('session',{ mode:'quad', prompt:qstate.prompt, style:qstate.style, rounds:qstate.rounds, total_turns:total, images:false,
-    agents:meta.map(function(m,i){ return { index:i, name:m.name, persona_name:m.persona_name, expertise:m.expertise }; }) });
+    agents:meta.map(function(m,i){ return { index:i, name:m.name, persona_name:m.persona_name, persona_person:m.persona_person }; }) });
   var t=350, beat=560, turn=0;
   for(var r=1;r<=qstate.rounds;r++){
     for(var i=0;i<4;i++){
       (function(rr,ii){
         turn++; var n=turn, obj=QMOCK_OBJ[(n-1)%QMOCK_OBJ.length], blob=QMOCK_BLOB[(n-1)%QMOCK_BLOB.length], pm=meta[ii];
-        qAt(t,function(){ qHandle('turn',{turn:n,total:total,round:rr,agent_idx:ii,name:pm.name,persona_name:pm.persona_name,expertise:pm.expertise}); });
+        qAt(t,function(){ qHandle('turn',{turn:n,total:total,round:rr,agent_idx:ii,name:pm.name,persona_name:pm.persona_name,persona_person:pm.persona_person}); });
         qAt(t+220,function(){ qHandle('agent',{agent_idx:ii,name:pm.name,turn:n,round:rr,persona_name:pm.persona_name,object:obj,
           message:{sender:pm.name,sees_on_canvas:'the accumulating canvas',new_object:obj,where:'the composition',palette:['#cbb2d9','#33406a'],reasoning:'a move in the voice of '+pm.persona_name,confidence_score:0.8}}); });
         qAt(t+400,function(){ qHandle('image_pending',{turn:n,agent_idx:ii,name:pm.name}); });
@@ -2774,7 +2932,7 @@ function qRunDemo(){
       })(r,i);
     }
   }
-  qAt(t,function(){ qHandle('turn',{turn:'JUDGE',total:total,agent_idx:null,name:'JUDGE',persona_name:'Critic',expertise:'-'}); });
+  qAt(t,function(){ qHandle('turn',{turn:'JUDGE',total:total,agent_idx:null,name:'JUDGE',persona_name:'Critic',persona_person:'-'}); });
   qAt(t+240,function(){ qHandle('critic',{evaluation:QMOCK_CRITIC}); });
   qAt(t+1600,function(){ qHandle('summary',{turns:total,objects:[],rounds:qstate.rounds,composite:QMOCK_CRITIC.scores.composite,elapsed:(t/1000).toFixed(1)}); });
   qAt(t+1800,function(){ qHandle('done',{}); });
@@ -2796,6 +2954,22 @@ function qStop(){
 $('toQuad').onclick=function(){ setAppMode('quad'); };
 $('toDual').onclick=function(){ setAppMode('dual'); };
 $('qBack').onclick=function(){ setAppMode('dual'); };
+var QSURPRISE_FALLBACK=[
+  {prompt:'A salt cathedral at the bottom of a dry sea',style:'deep-baroque · mineral light · oxidized gold'},
+  {prompt:'A lighthouse keeper’s greenhouse on a drifting iceberg',style:'glacial cyber-folk'},
+  {prompt:'A night market suspended between two skyscrapers',style:'neon monsoon, wet reflections'},
+  {prompt:'The last orchard on a terraformed moon',style:'sunlit botanical, thin atmosphere'}
+];
+$('qSurprise').onclick=function(){
+  var b=this; b.disabled=true; var old=b.textContent; b.textContent='Inventing…';
+  fetch('api/inspire').then(function(r){ return r.json(); }).then(function(j){
+    if(j.error||!j.prompt){ throw new Error(j.error||'no brief'); }
+    $('qPrompt').value=j.prompt; $('qStyle').value=j.style||'';
+  }).catch(function(){
+    var f=QSURPRISE_FALLBACK[Math.floor(Math.random()*QSURPRISE_FALLBACK.length)];
+    $('qPrompt').value=f.prompt; $('qStyle').value=f.style;
+  }).then(function(){ b.disabled=false; b.textContent=old; });
+};
 $('qRoundsUp').onclick=function(){ qSetRounds(qstate.rounds+1); };
 $('qRoundsDown').onclick=function(){ qSetRounds(qstate.rounds-1); };
 $('qLaunch').onclick=qLaunch;
@@ -2811,8 +2985,16 @@ $('qJudgeNew').onclick=function(){ qClearTimers(); if(qes){ qes.close(); qes=nul
 qSetRounds(1);
 
 // ---------- init ----------
+function initPersonaSelectors(){
+  var a=$('ariaPersona'), n=$('nexusPersona');
+  if(a){ a.innerHTML=personaOptions(state.personas.ARIA); renderPersonaDesc($('ariaPersonaDesc'), state.personas.ARIA); }
+  if(n){ n.innerHTML=personaOptions(state.personas.NEXUS); renderPersonaDesc($('nexusPersonaDesc'), state.personas.NEXUS); }
+}
+
 function init(){
   spawnBubbles();
+  initPersonaSelectors();
+  fetchPersonaCatalog(function(){ initPersonaSelectors(); if(typeof qBuildCards==='function' && qstate.loaded){ qBuildCards(); } });
   setMode('surprise'); setRounds(5);
   fetch('api/health').then(function(r){ return r.json(); }).then(function(h){
     state.live = true;
