@@ -1,0 +1,1514 @@
+% =============================================================================
+%  CanvasMind / RL_Multi_Agent — ACL-format technical report
+%
+%  Compiles two ways, automatically:
+%   (a) If the official ACL style files (acl.sty, acl_natbib.bst) are in this
+%       directory or on TEXINPUTS, they are used -> the true ACL layout.
+%       Get them from https://github.com/acl-org/acl-style-files
+%   (b) Otherwise a faithful ACL-layout emulation is used, so this file always
+%       compiles on a bare TeX Live / MiKTeX / Overleaf installation.
+%
+%  References are EMBEDDED (references_embedded.tex), so NO bibtex is needed.
+%  Build (run pdflatex TWICE so the embedded citations resolve):
+%      pdflatex canvasmind_acl && pdflatex canvasmind_acl
+%  A single pass leaves author-year citations showing as "?"; the second pass
+%  reads them back from the .aux and they render correctly.
+% =============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\newif\ifaclstyle
+\IfFileExists{acl.sty}{\aclstyletrue}{\aclstylefalse}
+
+\ifaclstyle
+  \usepackage[final]{acl}
+  \usepackage{times}
+\else
+  % ---- Faithful emulation of the ACL page geometry (letter, two columns) ----
+  \usepackage[letterpaper,textwidth=160mm,textheight=235mm,
+              top=1in,left=1in,columnsep=6mm,footskip=6mm]{geometry}
+  \usepackage{mathptmx}
+  \usepackage{natbib}
+  \setcitestyle{authoryear,round,aysep={},yysep={;}}
+  \renewcommand{\bibsection}{\section*{References}}
+  \setlength{\bibsep}{0pt plus 0.3ex}
+\fi
+
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+
+\setlength{\emergencystretch}{3em}
+\sloppy
+\setlength{\overfullrule}{0pt}          % never draw the black overflow bar
+% shrink-to-fit: scale a box down to \linewidth ONLY if it is wider (never up)
+\newcommand{\fitwidth}[1]{\resizebox{\ifdim\width>\linewidth \linewidth\else\width\fi}{!}{#1}}
+
+% ---- palette ----------------------------------------------------------------
+\definecolor{ink}{HTML}{1F2933}
+\definecolor{aria}{HTML}{0E7490}
+\definecolor{nexus}{HTML}{A21CAF}
+\definecolor{judge}{HTML}{B45309}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{soft}{HTML}{6B7280}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\textcolor{accent}{\texttt{\small #1}}}
+\newcommand{\ARIA}{\textsc{Aria}}
+\newcommand{\NEXUS}{\textsc{Nexus}}
+\newcommand{\JUDGE}{\textsc{Judge}}
+\newcommand{\full}{\textbf{full}}
+
+\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+\theoremstyle{definition}
+\newtheorem{remark}{Remark}
+
+\tikzset{
+  box/.style={rounded corners=2pt,draw=#1,line width=0.7pt,fill=#1!7,
+              text=ink,align=center,font=\scriptsize,inner sep=3.5pt,minimum height=7.5mm},
+  flow/.style={-{Stealth[length=1.8mm]},line width=0.7pt,draw=ink!70},
+  lbl/.style={font=\scriptsize\itshape,text=ink!70},
+  ax/.style={draw=ink!55,line width=0.6pt},
+  tick/.style={font=\tiny,text=ink!70},
+}
+
+% ---- title + abstract text, shared by both layout branches -------------------
+\newcommand{\PAPERTITLE}{CanvasMind: Inference-Time Reinforcement Learning for
+  Legible Multi-Agent Co-Creation on a Single Shared Canvas}
+\newcommand{\PAPERAUTHOR}{Vidvathama Ramesh \\ RL\_Multi\_Agent Project, TCS Research}
+
+\newcommand{\ABSTRACTTEXT}{%
+We present \textbf{CanvasMind} (repository name \textbf{RL\_Multi\_Agent}), a
+co-creative system in which two large-language-model agents paint a
+\emph{single shared canvas} by taking turns to add exactly one new object,
+under an \textbf{inference-time reinforcement-learning layer} that performs no
+gradient updates. Each turn, a UCB1 bandit selects an artistic strategy, the
+agent samples $N$ candidate additions in one completion, a reward model scores
+each candidate on five dimensions, and the agent commits to the argmax of its
+own \emph{deliberately misaligned} weighted reward---\ARIA{} is paid mostly for
+compositional coherence, \NEXUS{} mostly for originality---turning a shared
+canvas into a general-sum game. A third agent, \JUDGE{}, scores the
+collaboration but never lifts a brush. We instrument the run with four
+diagnostics: an empowerment proxy, a Goodhart reward-hacking monitor, exact
+two-player Shapley credit, and a coherence--originality Pareto trace.
+\\[3pt]\indent
+Beyond describing the system in full, we contribute a \textbf{formal audit},
+\textbf{five fixes}, and a \textbf{controlled ablation} that validates them.
+Because the ablation reuses the shipping \code{Bandit}, \code{scalar\_reward},
+empowerment and slope estimators, and replaces only the Azure-backed oracles
+with a calibrated stochastic reward environment, it measures the real algorithm
+rather than a reimplementation. We prove that the \emph{original} system was
+subtly broken: the UCB1 bandit's confidence bound was \emph{provably never
+evaluated} at the shipped round cap, degenerating to a fixed round-robin; the
+empowerment proxy at the old default $N{=}2$ collapses to a one-bit function of
+the reward gap; the Goodhart monitor false-fires on $9.7\%$ of ten-turn runs;
+and the Shapley split was read off a single noisy value query ($\pm16.6$
+percentage points at $\sigma_v{=}1$). In the ablation the audited version
+delivers \emph{no net benefit} over a pre-RL painter ($-0.05 \pm 0.03$ composite
+points). We then fix each defect---optimistic-initialised, tie-broken, and
+\emph{cross-session-persistent} bandits; best-of-$4$ by default; a batched
+multi-sample Shapley estimate; a significance-gated, within-agent Goodhart
+test; and a wired-in perceptual bound---and the same harness shows the fixed
+system reaching $+1.66 \pm 0.03$ composite points over baseline at the
+\emph{same} $1.56\times$ compute, with $\sim\!+0.6$ from best-of-$N$ (which
+matches the closed form $\rho\,\tau_u\,\mathbb{E}[Z_{(N)}]$ to $0.023$) and
+$\sim\!+1.1$ from the now-functional bandit, whose learning curve climbs to
+$98\%$ of the achievable ceiling within $\sim\!50$ sessions. We are explicit
+that this benefit is bounded by how much stable structure the strategy space
+actually has. We release the system, the harness, and every number as
+re-runnable code.%
+}
+
+\title{\PAPERTITLE}
+\author{\PAPERAUTHOR}
+\date{}
+
+\begin{document}
+
+\ifaclstyle
+  \maketitle
+  \begin{abstract}
+  \ABSTRACTTEXT
+  \end{abstract}
+\else
+  \twocolumn[%
+    \vspace*{2pt}
+    \begin{center}
+      {\LARGE\bfseries \PAPERTITLE\par}\vspace{10pt}
+      {\large \PAPERAUTHOR\par}\vspace{12pt}
+    \end{center}
+    \begin{center}\begin{minipage}{0.86\textwidth}
+      \begin{center}\textbf{Abstract}\end{center}\vspace{-4pt}
+      \small \ABSTRACTTEXT
+    \end{minipage}\end{center}
+    \vspace{14pt}
+  ]
+\fi
+
+% =============================================================================
+\section{Introduction}
+% =============================================================================
+Most generative-art tools collapse creation into a single prompt-to-image call:
+a user types a description and receives a finished picture. The intermediate
+reasoning---the compositional choices, the trade-offs, the give-and-take
+between competing aesthetic commitments---is invisible. CanvasMind reframes
+image generation as a \emph{visible, turn-based negotiation} between autonomous
+agents on one canvas that is handed back and forth.
+
+Three agents participate. \ARIA{} (Creative Director) opens the painting and
+adds structural elements; \NEXUS{} (Creative Challenger) inspects what \ARIA{}
+has done and contributes complementary objects; \JUDGE{} (Critic) never edits
+the artwork---it scores how well the two built on each other. The defining
+mechanic is \emph{additivity}: each turn adds exactly one new object on top of
+the previous image, so the painting grows object by object and every
+intermediate state is displayed.
+
+Onto this substrate we graft an inference-time RL layer. No parameters are
+updated: all ``learning'' happens within a session, through \emph{search}
+(best-of-$N$ over sampled candidate additions), \emph{selection} (a reward
+model scoring five aesthetic dimensions), \emph{exploration} (a per-agent UCB1
+bandit over eight artistic strategies), and \emph{verbal self-correction} (a
+Reflexion step triggered by a low-reward turn). The two agents optimise
+\emph{different} reward weightings of the same five dimensions. That
+misalignment is the point: it converts a cooperative task into a general-sum
+game in which coherence and originality must be traded against each other on a
+canvas neither agent controls alone.
+
+A system with these parts invites an obvious question that the literature
+usually leaves unasked: \emph{which of them actually does anything?} Papers that
+stack a bandit, a reward model, a credit-assignment scheme and a reward-hacking
+monitor rarely report what happens when each is removed. We do.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.3em,itemsep=1pt,topsep=2pt]
+\item \textbf{A system} (\S\ref{sec:overview}--\S\ref{sec:impl}): a turn-based,
+      single-shared-canvas protocol with explicit ``what I see~/ what I add''
+      JSON contracts; a dual-mode image pipeline (generation for the first
+      object, additive edits thereafter); an inference-time RL layer with
+      misaligned per-agent rewards; and a single-file, one-port runtime that
+      streams every event to the browser.
+\item \textbf{A formal analysis} (\S\ref{sec:analysis}) of five properties of
+      that implementation, including a proof that the UCB1 confidence bound is
+      \emph{never evaluated} at the shipped round cap, and that the empowerment
+      proxy degenerates to a one-bit statistic under the default $N{=}2$.
+\item \textbf{Five fixes} (\S\ref{sec:fixes}) for the defects the analysis
+      exposes, each a small change to the shipped runtime.
+\item \textbf{A controlled ablation} (\S\ref{sec:ablation}--\S\ref{sec:results})
+      that reuses the shipping decision code under a calibrated stochastic
+      reward oracle, measures the audited and the fixed systems side by side,
+      isolates the contribution of every RL component, cross-validates the
+      best-of-$N$ effect against a closed form, and traces the repaired bandit's
+      learning curve.
+\item \textbf{An honest accounting of when the fixes help}: the bandit repair is
+      worth nothing when artistic strategies are exchangeable and grows with the
+      stable structure the strategy space actually has; we report that
+      dependence rather than a single flattering number.
+\item \textbf{An eight-persona generative-agent substrate}
+      (\S\ref{sec:substrate}) in the seed-memory format of
+      \citet{park2023generative}, with an audit of which persona parameters are
+      actually wired into behaviour.
+\item \textbf{A second, RL-free pipeline} (\S\ref{sec:quad}): four
+      independently configured persona agents acting in strict sequence, used as
+      an architectural control.
+\end{enumerate}
+
+\paragraph{Scope and honesty.}
+The ablation in \S\ref{sec:ablation} is a \emph{simulation study}. The reward
+model and quality probes are replaced by a stochastic oracle with a stated
+generative model; no Azure OpenAI calls are made. Every selection rule, bandit
+update, empowerment value, slope estimate and Shapley value is nevertheless
+computed by the shipping code path. No human study has been run;
+\S\ref{sec:human} specifies the protocol and instrumentation that would produce
+one. We are explicit throughout about which claims are analytical, which are
+simulated, and which remain untested.
+
+% =============================================================================
+\section{Related Work}
+% =============================================================================
+\paragraph{Generative and language agents.}
+Our substrate follows \citet{park2023generative}, who introduced the memory
+stream with retrieval scored by recency, importance and relevance, plus
+reflection into higher-level insights; see also \citet{park2022social}. We adopt
+their seed-memory schema (\code{innate}, \code{learned}, \code{currently},
+\code{lifestyle}, \code{living\_area}, \code{vision\_r}, \code{att\_bandwidth},
+\code{retention}) and their reflection procedure, and we audit which of these
+fields our implementation actually consumes (\S\ref{sec:substrate}). Reflexion
+\citep{shinn2023reflexion} contributes verbal self-correction driven by a
+scalar signal; ReAct \citep{yao2023react} contributes the interleaving of
+reasoning and action. Multi-agent LLM frameworks
+\citep{li2023camel,hong2024metagpt,wu2024autogen,du2024debate} typically assume
+a \emph{shared} objective; our agents do not share one.
+
+\paragraph{Reward models and inference-time selection.}
+Best-of-$N$ reranking against a learned reward model is standard
+\citep{nakano2021webgpt,cobbe2021training}, and recent work characterises it as
+a way to trade test-time compute for quality \citep{snell2025scaling}. Our
+reward model is an LLM scoring a rubric, i.e.\ AI feedback
+\citep{bai2022constitutional,lee2024rlaif} rather than a model trained on human
+preferences \citep{christiano2017deep,stiennon2020learning,ouyang2022training}.
+\citet{gao2023scaling} show that optimising harder against a proxy reward
+eventually reduces true quality; \S\ref{sec:results} reproduces the mechanism of
+that wedge in miniature, in closed form.
+
+\paragraph{Bandits.}
+Strategy selection uses UCB1 \citep{auer2002finite}, building on
+\citet{lai1985asymptotically}; see \citet{sutton2018reinforcement} for the
+general framing. Proposition~\ref{prop:bandit} concerns the regime---horizon
+shorter than the number of arms---in which UCB1's optimism term never fires.
+
+\paragraph{Multi-agent credit assignment.}
+The canvas is a shared outcome, so attributing credit is a cooperative-game
+problem \citep{shapley1953value}. Deep MARL approaches factorise value
+\citep{sunehag2018value,rashid2018qmix} or use counterfactual baselines
+\citep{foerster2018counterfactual}; Shapley values have been used both as a
+learning signal \citep{wang2020shapley} and as post-hoc explanation
+\citep{heuillet2022collective}. With two players the Shapley value has a closed
+form, which we use---and whose sensitivity to a noisy value oracle we quantify
+(\S\ref{sec:results}). Misaligned per-agent rewards make the interaction a
+general-sum Markov game \citep{littman1994markov,lowe2017multi}.
+
+\paragraph{Empowerment.}
+Empowerment measures an agent's control over its future
+\citep{klyubin2005empowerment,salge2014empowerment,mohamed2015variational}.
+CanvasMind uses a cheap surrogate---the normalised entropy of the softmax over
+candidate rewards---whose degeneracy we characterise in
+Proposition~\ref{prop:emp}.
+
+\paragraph{Goodhart's law and reward hacking.}
+``When a measure becomes a target, it ceases to be a good measure''
+\citep{goodhart1984problems,strathern1997improving}; see
+\citet{manheim2018categorizing} for a taxonomy and
+\citet{amodei2016concrete,skalse2022defining,pan2022effects,casper2023open} for
+the RL-specific treatment. CanvasMind ships an online monitor comparing the
+optimised proxy against an independent probe; we report its operating
+characteristic rather than merely asserting that it works.
+
+\paragraph{LLM-as-a-judge.}
+\JUDGE{}, the reward model, the independent probe and the Shapley value oracle
+are all the same underlying deployment prompted differently. This inherits the
+known pathologies of LLM evaluators: self-preference
+\citep{panickssery2024llm}, position and verbosity bias
+\citep{wang2024large,zheng2023judging}. We treat this as a first-order threat to
+validity, and the fix of \S\ref{sec:fixes} lets these instruments run on a
+separate deployment (Prop.~\ref{prop:indep}).
+
+\paragraph{Image generation and editing.}
+The additive canvas relies on instruction-guided editing that preserves prior
+content \citep{meng2022sdedit,hertz2023prompt,brooks2023instructpix2pix},
+implemented here via a hosted \code{images/edits} endpoint
+\citep{microsoft2025azure} rather than a local diffusion model
+\citep{rombach2022high}.
+
+\paragraph{Computational creativity and co-creation.}
+Framing follows \citet{boden2004creative}, \citet{colton2012computational} and
+\citet{ritchie2007some}; the interaction design follows co-creative agents such
+as \citet{davis2016empirically}, \citet{oh2018lead} and
+\citet{karimi2020creative}. \citet{epstein2023art} and
+\citet{doshi2024generative} motivate making machine creative process visible
+rather than only its output.
+
+% =============================================================================
+\section{System Overview}
+\label{sec:overview}
+% =============================================================================
+A session has three phases. \textbf{(1) Briefing:} the brief and style are
+either invented by the model (\emph{AI Surprise}) or typed by the user.
+\textbf{(2) Collaboration:} \ARIA{} and \NEXUS{} alternate for $R$ rounds
+($2R$ turns); each turn produces one text contribution and one image.
+\textbf{(3) Critique:} \JUDGE{} scores the collaboration and the accumulated
+canvas is presented. Every event is streamed to the browser over Server-Sent
+Events \citep{whatwg2024sse}. A \emph{Stop} control halts the turns; \JUDGE{}
+then evaluates whatever was completed.
+
+Table~\ref{tab:agents} summarises the three roles and, crucially, which of them
+may modify the canvas; Figure~\ref{fig:arch} shows how one process serves the
+interface, the agents and the model calls. \S\ref{sec:formulation} formalises
+the canvas as a symbolic state, \S\ref{sec:rl} describes the RL layer that acts
+on it, and Appendix~\ref{app:hyper} lists every constant referenced below.
+
+\begin{table}[t]
+\centering\small
+\fitwidth{\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Agent} & \textbf{Role} & \textbf{Edits canvas?}\\
+\midrule
+\ARIA{}  & Creative Director   & yes\\
+\NEXUS{} & Creative Challenger & yes\\
+\JUDGE{} & Critic              & \textbf{no}\\
+\bottomrule
+\end{tabular}}
+\caption{The three roles. \JUDGE{} is outside the action loop, so its scores are
+not a target of optimisation (\S\ref{sec:instruments}).}
+\label{tab:agents}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}
+  \node[box=accent,minimum width=32mm] (ui) {\textbf{Browser UI}\\ filmstrip $\cdot$ agent feeds\\ critic $\cdot$ research dashboard};
+  \node[box=accent,minimum width=52mm,right=30mm of ui] (be)
+      {\textbf{Single-file app} --- \file{canvasmind\_app.py} (FastAPI, one port)\\
+       generative-agent substrate $\cdot$ inference-time RL layer\\
+       \code{Session} (dual) $\cdot$ \code{QuadSession} (sequential) $\cdot$ SSE};
+  \node[box=judge,minimum width=38mm,right=30mm of be] (az)
+      {\textbf{Azure OpenAI} (raw REST)\\ \code{gpt-5.2} --- decisions, reward model,\\ probes, \JUDGE{}\\ \code{gpt-image-1} --- generate \& edit};
+  \draw[flow,transform canvas={yshift=2.5pt}] (ui) -- node[lbl,above]{\code{POST api/start}} (be);
+  \draw[{Stealth[length=1.8mm]}-,transform canvas={yshift=-3.5pt},line width=0.7pt,draw=ink!70]
+        (ui) -- node[lbl,below]{SSE event stream} (be);
+  \draw[flow,transform canvas={yshift=2.5pt}] (be) -- node[lbl,above]{chat / images} (az);
+  \draw[{Stealth[length=1.8mm]}-,transform canvas={yshift=-3.5pt},line width=0.7pt,draw=ink!70]
+        (be) -- node[lbl,below]{JSON / base64 PNG} (az);
+\end{tikzpicture}}
+\caption{Architecture. One process serves the UI and the agents on a single
+port; the browser receives live updates over SSE; all model calls are
+server-side over raw REST. A single origin eliminates CORS and reverse-proxy
+path rewriting, which matters for deployment behind a corporate VM proxy.}
+\label{fig:arch}
+\end{figure*}
+
+% =============================================================================
+\section{Problem Formulation}
+\label{sec:formulation}
+% =============================================================================
+Let the canvas state at turn $t$ be the \emph{ordered list of object
+descriptions} $O_t = (o_1,\dots,o_t)$, and let $I_t$ be the rendered image.
+Agents act on $O_t$; $I_t$ is produced from $I_{t-1}$ and $o_t$ by an image
+model but is \emph{never fed back} into any decision or reward computation.
+
+\begin{remark}[The RL loop is symbolic, not visual]
+\label{rem:symbolic}
+The reward model, the independent-quality probe and the Shapley value oracle
+all receive a comma-joined \emph{text} listing of $O_t$. No component of the
+system observes pixels. Consequently the RL layer cannot perceive image-space
+drift, and the rendered canvas can diverge from the symbolic state without any
+instrument noticing. This is a design property, not an incidental bug, and it
+bounds what the diagnostics of \S\ref{sec:instruments} can mean.
+\end{remark}
+
+Two agents $a \in \{\ARIA{},\NEXUS{}\}$ alternate. At turn $t$ the acting agent
+observes $O_{t-1}$, a retrieved memory set $M_t$, and a bounded window of the
+transcript. Its action is a natural-language object $o_t$ together with a
+placement and palette. The environment is deterministic in $O$
+($O_t = O_{t-1} \oplus o_t$) and stochastic only through the language model.
+
+Each agent has its own reward
+\begin{equation}
+r_a(o) \;=\; \sum_{k \in D} w_a^{(k)}\, s^{(k)}(o),
+\qquad \sum_{k \in D} w_a^{(k)} = 1,
+\label{eq:reward}
+\end{equation}
+over the five dimensions $D = \{$\emph{compositional\_coherence},
+\emph{style\_fidelity}, \emph{emotional\_resonance}, \emph{originality},
+\emph{clarity}$\}$, with $s^{(k)} \in [0,10]$ produced by the reward model.
+Because $w_{\ARIA{}} \neq w_{\NEXUS{}}$ (Table~\ref{tab:weights}), the stage
+game is general-sum: the two agents rank the same candidate differently. The
+cosine similarity between the two weight vectors is $0.591$.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Dimension} & $w_{\ARIA{}}$ & $w_{\NEXUS{}}$\\
+\midrule
+compositional\_coherence & \textbf{0.40} & 0.10\\
+style\_fidelity          & 0.25 & 0.15\\
+emotional\_resonance     & 0.15 & 0.20\\
+originality              & 0.10 & \textbf{0.45}\\
+clarity                  & 0.10 & 0.10\\
+\midrule
+$\|w\|_2$                & 0.515 & 0.534\\
+\bottomrule
+\end{tabular}}
+\caption{The misaligned reward weights (\code{REWARD\_WEIGHTS}). \ARIA{} is paid
+for coherence, \NEXUS{} for originality. Both are convex combinations, so
+$r_a \in [0,10]$.}
+\label{tab:weights}
+\end{table}
+
+% =============================================================================
+\section{The Generative-Agent Substrate}
+\label{sec:substrate}
+% =============================================================================
+\subsection{Eight personas}
+Every agent slot---both \ARIA{}/\NEXUS{} and each of the four Quad agents---is
+instantiated from one of eight personas (Table~\ref{tab:personas}), written in
+the seed-memory format of \citet{park2023generative}. Each carries identity
+fields and three cognitive parameters. Two auxiliary fields, \code{voice} and
+\code{image\_style}, translate a life into a way of painting.
+
+\begin{table*}[t]
+\centering
+\setlength{\tabcolsep}{5pt}
+\fitwidth{%
+\begin{tabular}{@{}lllccc@{}}
+\toprule
+\textbf{Key} & \textbf{Name} & \textbf{Age / occupation} & \code{vision\_r} & \code{att\_bandwidth} & \code{retention}\\
+\midrule
+\code{isabella\_rodriguez} & Isabella Rodriguez & 34, cafe owner & 8 & 8 & 8\\
+\code{klaus\_mueller}      & Klaus Mueller      & 20, sociology researcher & 6 & 10 & 10\\
+\code{maya\_okonkwo}       & Maya Okonkwo       & 41, marine biologist & 10 & 6 & 9\\
+\code{tomas\_grieg}        & Tomas Grieg        & 67, retired shipwright and woodcarver & 9 & 5 & 7\\
+\code{priya\_raghunathan}  & Priya Raghunathan  & 29, software engineer and astronomer & 7 & 9 & 10\\
+\code{amara\_diallo}       & Amara Diallo       & 23, street muralist and organiser & 9 & 7 & 6\\
+\code{hiroshi\_tanaka}     & Hiroshi Tanaka     & 58, jazz saxophonist and club owner & 7 & 10 & 8\\
+\code{elena\_voss}         & Elena Voss         & 36, emergency-room nurse & 10 & 8 & 9\\
+\midrule
+\multicolumn{3}{@{}l}{\emph{Wired into behaviour?}} & \textbf{no} & yes & yes\\
+\multicolumn{3}{@{}l}{\emph{Mechanism}} & --- & transcript window & retrieval budget $k$\\
+\bottomrule
+\end{tabular}}
+\caption{The eight personas. \code{att\_bandwidth} sets the number of recent
+transcript lines shown to the agent, clamped to $[2,12]$; \code{retention} sets
+the retrieval budget $k$, clamped to $[2,12]$. \code{vision\_r} bounds how much of
+the accumulated canvas enters the agent's prompt (\S\ref{sec:fixes}); the reward
+model and probes still score the full canvas. The fields \code{daily\_plan\_req},
+\code{curr\_time}, \code{curr\_tile}, \code{gender}, \code{first\_name} and
+\code{last\_name} are stored but unused.}
+\label{tab:personas}
+\end{table*}
+
+\subsection{Memory stream, retrieval, reflection}
+Each agent owns a memory stream of natural-language memory objects, each with a
+creation time, a last-access time and an importance score in $[1,10]$ obtained
+by prompting the model for \emph{poignancy} (fallback $4$). Retrieval for a
+query $q$ at turn $\tau$ scores each memory $m$ by
+\begin{equation}
+\mathrm{score}(m) = \widehat{\gamma^{\,\tau - \ell(m)}}
+ + \widehat{\iota(m)/10}
+ + \widehat{\cos(q,m)},
+\label{eq:retrieval}
+\end{equation}
+where $\ell$ is last access, $\iota$ importance, $\gamma = 0.995$, and
+$\widehat{\;\cdot\;}$ is min--max normalisation across the stream. Relevance
+uses embedding cosine when an embedding deployment is configured, else
+stop-worded term-frequency cosine. The top $k$ memories are returned and their
+last-access times refreshed.
+
+\begin{remark}[The decay constant is inherited, not tuned]
+$\gamma = 0.995$ was chosen in \citet{park2023generative} for a clock ticking in
+simulated minutes. Here the clock ticks \emph{once per turn}, so across a
+maximal $16$-turn session the raw recency factor spans only $[0.923, 1.0]$. The
+min--max normalisation in Eq.~\ref{eq:retrieval} rescales that narrow band back
+to $[0,1]$, so recency still discriminates---but its influence is set by the
+normalisation, not by $\gamma$.
+\end{remark}
+
+When accumulated observation importance since the last reflection exceeds
+$\Theta = 10$, the agent reflects: it asks the model for the three most salient
+high-level questions about its evolving approach, retrieves the top four
+memories for each, and synthesises three cited insights, stored as reflection
+memories with importance $6$. The three most recent reflections are injected
+into the agent's summary description on every subsequent turn---the only channel
+by which an agent's behaviour changes within a session other than the transcript
+itself.
+
+% =============================================================================
+\section{The Inference-Time RL Layer}
+\label{sec:rl}
+% =============================================================================
+No gradients are computed and no weights are stored between sessions. The layer
+consists of five mechanisms, exercised every turn (Figure~\ref{fig:loop}).
+
+\begin{figure*}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}[node distance=5.5mm]
+  \node[box=accent,minimum width=21mm] (perc) {\textbf{1. Perceive}\\ canvas $+$ partner's\\ last move};
+  \node[box=accent,right=of perc,minimum width=21mm] (ret) {\textbf{2. Retrieve}\\ top-$k$ memories\\ $k=$ \code{retention}};
+  \node[box=aria,right=of ret,minimum width=22mm] (band) {\textbf{3. Explore}\\ UCB1 picks a\\ strategy $s \in S$};
+  \node[box=aria,right=of band,minimum width=23mm] (gen) {\textbf{4. Propose}\\ sample $N$ candidates\\ (one completion)};
+  \node[box=nexus,right=of gen,minimum width=23mm] (rm) {\textbf{5. Score}\\ reward model rates\\ all $N$ on 5 dims};
+  \node[box=nexus,right=of rm,minimum width=21mm] (sel) {\textbf{6. Commit}\\ $\arg\max_j r_a(c_j)$};
+  \node[box=judge,below=8mm of sel,minimum width=21mm] (probe) {\textbf{7. Probe}\\ independent quality\\ (Goodhart)};
+  \node[box=judge,left=of probe,minimum width=23mm] (refl) {\textbf{8. Reflect?}\\ if $r < 4.5$\\ (Reflexion)};
+  \node[box=accent,left=of refl,minimum width=23mm] (paint) {\textbf{9. Paint}\\ generate ($t{=}1$) or\\ additive edit};
+  \node[box=accent,left=of paint,minimum width=22mm] (store) {\textbf{10. Store}\\ own action as\\ a memory};
+  \draw[flow] (perc) -- (ret); \draw[flow] (ret) -- (band); \draw[flow] (band) -- (gen);
+  \draw[flow] (gen) -- (rm);   \draw[flow] (rm) -- (sel);   \draw[flow] (sel) -- (probe);
+  \draw[flow] (probe) -- (refl); \draw[flow] (refl) -- (paint); \draw[flow] (paint) -- (store);
+\end{tikzpicture}}
+\caption{One turn of the dual pipeline. Steps 3--6 and 8 are the RL layer;
+steps 1--2 and 10 are the generative-agent substrate; step 7 is a diagnostic.
+The committed reward is fed back to the bandit as the reward of arm $s$. Steps 4
+and 5 are each a \emph{single} completion regardless of $N$, which is why
+best-of-$N$ costs no additional model calls (\S\ref{sec:compute}).}
+\label{fig:loop}
+\end{figure*}
+
+\paragraph{(1) Reward model.}
+A single batched completion rates all $N$ prospective canvases on the five
+dimensions of Eq.~\ref{eq:reward}. The prospective canvas for candidate $c_j$ is
+the text ``\code{canvas with:} $O_{t-1}, c_j$''.
+
+\paragraph{(2) Best-of-$N$.}
+The agent samples $N$ distinct candidate additions in one completion
+($N =$ \code{BEST\_OF\_N}, default $4$ after the fix of \S\ref{sec:fixes}; was
+$2$; set by \code{CM\_BEST\_OF\_N}) and commits to $\arg\max_j r_a(c_j)$ under
+its own weights. Rejected candidates and their rewards are streamed to the UI.
+
+\paragraph{(3) UCB1 bandit over strategies.}
+Each agent keeps its own bandit over eight artistic strategies (establish a
+focal point; add atmospheric depth; introduce bold contrast; enrich fine detail;
+open expressive negative space; add a narrative element; unify the palette;
+heighten emotional tone). The selected strategy is injected into the proposal
+prompt. The selector scores every arm by the optimism term
+$\bar{\mu}_s + c\sqrt{\ln(t{+}1)/n_s}$, $c = 1.4$, with \emph{optimistic
+initialisation} (each arm seeded at the top of the reward scale with one
+pseudo-count) and uniform random tie-breaking; the learned means \emph{persist
+across sessions}. The original code, which returned the first never-pulled arm
+before the bound was ever consulted, is analysed in Proposition~\ref{prop:bandit}
+and repaired in \S\ref{sec:fixes}.
+
+\paragraph{(4) Reward-aware Reflexion.}
+If the committed candidate's reward falls below $4.5$, the agent runs the
+reflection procedure of \S\ref{sec:substrate} and the resulting insights enter
+its summary description, in the spirit of \citet{shinn2023reflexion}.
+
+\paragraph{(5) Autonomy and directive resistance.}
+The user sets an autonomy scalar $\alpha \in [0,1]$ and may supply a directive.
+If $\alpha \ge 0.66$ the proposal prompt tells the agent it \emph{may resist} the
+directive and set \code{resisted\_human}; otherwise it is told to honour it.
+Resistance is surfaced as a warning event. Note that $\alpha$ is an
+\emph{instruction}, not a constraint: nothing enforces compliance below the
+threshold.
+
+% =============================================================================
+\section{Diagnostic Instruments}
+\label{sec:instruments}
+% =============================================================================
+Four instruments run alongside the agents and are emitted in a single
+\code{metrics} event at the end of a session.
+
+\paragraph{Empowerment.}
+$E = H(\mathrm{softmax}(r/T))/\ln N$ with $T = 2.0$ over the $N$ candidate
+rewards: how many distinct good futures the agent's action channel commands this
+turn. The human's ``empowerment'' is reported as $1-\alpha$, which is a
+definition rather than a measurement.
+
+\paragraph{Goodhart monitor.}
+The optimised proxy series $\{r_t\}$ is compared against an
+\emph{independent-quality} series $\{q_t\}$ obtained by prompting for holistic
+aesthetic merit while explicitly ignoring the rubric. With
+$\beta_{\text{proxy}}$ and $\beta_{\text{indep}}$ the ordinary-least-squares
+slopes over turns, the monitor declares reward hacking iff
+\begin{equation}
+\beta_{\text{proxy}} > 0.05
+\;\wedge\;
+\beta_{\text{indep}} < \beta_{\text{proxy}} - 0.10 .
+\label{eq:goodhart}
+\end{equation}
+
+\paragraph{Shapley credit.}
+With $v(\emptyset) = 0$ and $v(S)$ the model-estimated composite quality of a
+canvas containing only the objects in $S$, the exact two-player Shapley value is
+\begin{equation}
+\phi_{\ARIA{}} = \tfrac{1}{2}\!\left[v(A) + \big(v(A\!\cup\!B) - v(B)\big)\right],
+\label{eq:shapley}
+\end{equation}
+and symmetrically for \NEXUS{}. Credit is reported as a percentage share.
+
+\paragraph{Pareto trace.}
+Each committed candidate contributes the pair (\emph{coherence},
+\emph{originality}), tracing the frontier the two misaligned objectives
+negotiate.
+
+Table~\ref{tab:instruments} sets out the five scoring instruments the system
+runs and marks the single one that is optimised against. That asymmetry is what
+keeps \JUDGE{}'s composite from being circular---though not what makes it
+unbiased (Prop.~\ref{prop:indep}).
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3.5pt}
+\fitwidth{\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Instrument} & \textbf{Rubric} & \textbf{Optimised?} & \textbf{In loop?}\\
+\midrule
+Reward model      & 5 dims, \emph{clarity}     & \textbf{yes} & yes\\
+Independent probe & holistic merit             & no  & no\\
+\JUDGE{} composite& 5 dims, \emph{collab.\ q.} & no  & no\\
+Shapley $v(S)$    & composite quality          & no  & no\\
+Importance        & poignancy                  & no  & yes\\
+\bottomrule
+\end{tabular}}
+\caption{Five scoring instruments; exactly one is a target of optimisation. The
+reward rubric and the \JUDGE{} rubric differ in their fifth dimension: the
+reward model scores \emph{clarity}, \JUDGE{} scores
+\emph{collaboration\_quality}. All five are the same LLM deployment prompted
+differently.}
+\label{tab:instruments}
+\end{table}
+
+% =============================================================================
+\section{The Quad-Agent Sequential Pipeline}
+\label{sec:quad}
+% =============================================================================
+A second, isolated pipeline runs four independently configured agents in strict
+sequence ($1 \to 2 \to 3 \to 4$) per round, $R \in [1,6]$, yielding $4R$
+additive images. Each agent has a name, an \emph{artistic voice} (one of six
+presets: Vanguard Minimalist, Neo-Noir Cyberpunk, Biomorphic Surrealist, Baroque
+Traditionalist, Kinetic Futurist, Luminous Impressionist), an optional free-text
+prompt that overrides the preset, and a persona identity drawn from the same
+eight of Table~\ref{tab:personas}. A deterministic keyword router,
+\code{ArtHistoryRAG}, matches the brief and voice against a $16$-entry knowledge
+base of movements and techniques and injects up to three stylistic
+clarifications---a degenerate retriever \citep{lewis2020retrieval} whose
+interface is deliberately retriever-shaped so it can be swapped for a vector
+store.
+
+\textbf{The Quad pipeline contains no RL layer} (\S\ref{sec:rl}): no bandit, no
+best-of-$N$, no reward model, no memory stream, no Shapley. It shares only the
+additive canvas, the \JUDGE{} critic and the SSE contract. It therefore serves
+as an architectural control: the difference between the two pipelines is exactly
+the RL layer plus the memory substrate (Figure~\ref{fig:quad}).
+
+\begin{figure*}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}[node distance=6mm]
+  \node[box=accent,minimum width=20mm] (brief) {\textbf{Brief}\\ (AI or user)\\ $+$ style};
+  \node[box=aria,right=8mm of brief,minimum width=22mm] (a1) {\textbf{Agent 1}\\ artistic voice\\ $+$ persona\\ $+1$ object};
+  \node[box=nexus,right=of a1,minimum width=22mm] (a2) {\textbf{Agent 2}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[box=judge,right=of a2,minimum width=22mm] (a3) {\textbf{Agent 3}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[box=accent,right=of a3,minimum width=22mm] (a4) {\textbf{Agent 4}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[draw=ink!40,dashed,rounded corners=3pt,right=of a4,minimum width=15mm,minimum height=8mm,font=\scriptsize,align=center] (dots) {next\\ round\\ $\times R$};
+  \node[box=judge,right=6mm of dots,minimum width=22mm] (judge) {\textbf{\JUDGE{}}\\ \emph{no edit}\\ scores $+$ presents};
+  \node[box=accent,below=7mm of a1,minimum width=26mm] (rag) {\code{ArtHistoryRAG}\\ \scriptsize 16-entry KB $\to$ up to 3\\ \scriptsize stylistic keywords};
+  \draw[flow] (brief) -- (a1); \draw[flow] (a1) -- (a2); \draw[flow] (a2) -- (a3);
+  \draw[flow] (a3) -- (a4); \draw[flow] (a4) -- (dots); \draw[flow] (dots) -- (judge);
+  \draw[flow,dashed,draw=ink!45] (rag.east) -| (a2.south);
+  \draw[flow,dashed,draw=ink!45] (rag.east) -| (a3.south);
+  \begin{scope}[on background layer]
+    \node[fit=(a1)(a4),draw=ink!25,rounded corners=4pt,inner sep=6pt,
+      label={[lbl,yshift=-1pt]above:one shared canvas, strict sequence $1\!\to\!2\!\to\!3\!\to\!4$ per round ($4R$ additive edits; \textbf{no} RL layer, \textbf{no} memory)}] {};
+  \end{scope}
+\end{tikzpicture}}
+\caption{The Quad-Agent sequential pipeline. Four independently configured agents
+each add one object in strict order per round; \code{ArtHistoryRAG} injects
+stylistic keywords when it recognises a movement; \JUDGE{} scores and presents.
+Unlike the dual pipeline (Figure~\ref{fig:loop}) there is no bandit, reward model,
+best-of-$N$, memory stream or Shapley---only the additive canvas and the critic
+are shared.}
+\label{fig:quad}
+\end{figure*}
+
+% =============================================================================
+\section{Implementation}
+\label{sec:impl}
+% =============================================================================
+The production runtime is a single Python file, \file{canvasmind\_app.py}
+($\approx$3{,}000 lines), maintained as three byte-identical copies. It serves
+the UI and the API on one port. A modular reference stack (\file{backend/},
+$45$ Python modules) and a React frontend also exist; the RL layer lives
+\emph{only} in the single-file runtime.
+
+\paragraph{Azure via raw REST.}
+Calls use \code{max\_completion\_tokens} and send no custom temperature, which
+the \code{gpt-5.2} deployment requires \citep{microsoft2025azure}. Turn $1$
+calls \code{images/generations}; every later turn calls \code{images/edits} with
+the current canvas as multipart form-data and an emphatic ``keep everything, add
+only the one new element'' instruction. Both return base64 PNG, inlined as
+\code{data:} URLs. Every image step is wrapped in try/except: a failed edit emits
+a warning, keeps the previous canvas and continues.
+
+\paragraph{Streaming.}
+A background thread per session pushes events onto a queue; the SSE endpoint
+drains it. Thirteen event types are defined: \code{session}, \code{turn},
+\code{agent}, \code{reflection}, \code{image\_pending}, \code{image},
+\code{critic}, \code{final}, \code{metrics}, \code{summary}, \code{warning},
+\code{error}, \code{done}.
+
+\paragraph{Robust JSON.}
+Model output is parsed by extractors that strip Markdown fences and take the
+outermost brace- or bracket-delimited span. Every parse has a fallback that keeps
+the session alive, so one malformed reply never aborts a run.
+
+\subsection{Compute budget}
+\label{sec:compute}
+Per dual turn the layer issues six model calls: importance scoring, candidate
+proposal, reward scoring, the independent probe, importance scoring of the
+agent's own action, and one image call. Reflection adds two. At session end,
+\JUDGE{} costs one call and Shapley three. A session with $R$ rounds therefore
+costs $12R + 4$ calls, against $8R + 1$ for the pre-RL painter---a $1.56\times$
+increase at $R{=}5$. Crucially, \textbf{proposal and reward scoring are each one
+batched call regardless of $N$}, so best-of-$8$ costs the same number of calls as
+best-of-$2$ and differs only in output tokens.
+
+% =============================================================================
+\section{Formal Analysis: Four Defects}
+\label{sec:analysis}
+% =============================================================================
+The propositions below concern the \emph{original} implementation (which we call
+v1). Each was verified against the actual code (\S\ref{sec:ablation}) and each is
+repaired in \S\ref{sec:fixes}; we keep them because they are the reason the fixes
+exist, and because three of them are non-obvious.
+
+\begin{proposition}[v1: the UCB1 bound is never evaluated]
+\label{prop:bandit}
+Let $|S| = 8$ be the number of strategies and let $R \le 8$ be the round cap
+enforced by \code{Session}. In v1 each agent pulls exactly one arm per round,
+hence at most $8$ arms per session, and the selector returns the first arm with
+$n_s = 0$ before computing any confidence bound. Therefore the UCB1 optimism term
+is evaluated zero times, and within a session the bandit is a deterministic
+round-robin over $S$ in declaration order. Since v1 bandit state is constructed
+per \code{Session} and never persisted, no learning occurs across sessions
+either.
+\end{proposition}
+
+\begin{proof}
+v1's \code{Bandit.select} iterates $S$ in order and returns the first $s$ with
+$n_s = 0$; the argmax branch is reached only if $\forall s: n_s > 0$, which
+requires at least $|S| = 8$ prior pulls. The number of pulls by one agent after
+$R$ rounds is exactly $R$, and $R \le 8$ by the clamp $\max(1,\min(R,8))$. Hence
+$\exists s: n_s = 0$ at every selection, and the returned arm at the $i$-th pull
+is $s_i$. \hfill$\square$
+\end{proof}
+
+\begin{proposition}[v1: empowerment is a one-bit statistic at $N=2$]
+\label{prop:emp}
+For $N = 2$ with rewards $r_1 \ge r_2$ and $\delta = r_1 - r_2$, the empowerment
+proxy equals the binary entropy, in bits, of a logistic function of the gap:
+\begin{equation}
+E \;=\; H_b\!\big(\sigma(\delta/T)\big), \qquad \sigma(x) = \tfrac{1}{1+e^{-x}},
+\end{equation}
+with $T = 2$. Hence $E$ is a strictly decreasing function of $\delta$ alone: it
+is invariant to the reward level, and carries no information beyond the gap.
+$E = 1$ iff $\delta = 0$. (v1 shipped $N=2$; the fix raises the default to $4$.)
+\end{proposition}
+
+\begin{proof}
+$\mathrm{softmax}([r_1,r_2]/T)$ has first component
+$1/(1+e^{-\delta/T}) = \sigma(\delta/T)$. Normalising the entropy by $\ln 2$
+converts nats to bits. Strict monotonicity follows from $H_b'(p) < 0$ for
+$p > 1/2$ and $\sigma' > 0$. \hfill$\square$
+\end{proof}
+
+\begin{proposition}[Shapley efficiency holds; v1 precision does not]
+\label{prop:shapley}
+Eq.~\ref{eq:shapley} satisfies $\phi_{\ARIA{}} + \phi_{\NEXUS{}} = v(A\cup B)$
+exactly, for any $v$ with $v(\emptyset)=0$. However $v$ is an LLM estimate and is
+neither guaranteed monotone nor superadditive; whenever
+$v(A\cup B) < v(A) - v(B)$ the reported credit $\phi_{\NEXUS{}}$ is negative, and
+the percentage share (which divides by $\phi_A + \phi_B$) is then ill-behaved.
+v1 estimated each coalition value from a \emph{single} query, so the share was
+uninformative at plausible noise; the fix averages several batched samples and
+reports a confidence interval (\S\ref{sec:fixes}).
+\end{proposition}
+
+\begin{proposition}[v1: the marginal and Goodhart series are cross-objective]
+\label{prop:marginal}
+The quantity v1 recorded as \code{marginal} is
+$r_{a_t}(o_t) - r_{a_{t-1}}(o_{t-1})$ with $a_t$ alternating. Since
+$r_{\ARIA{}}$ and $r_{\NEXUS{}}$ are different functionals of the same dimension
+vector (Table~\ref{tab:weights}), this is a difference of two \emph{different}
+objectives at two different states, not a marginal contribution. The same
+interleaving affects v1's Goodhart proxy series $\{r_t\}$: its OLS slope in
+Eq.~\ref{eq:goodhart} is the trend of an alternating mixture. The fix computes
+marginals against the same agent's previous turn and estimates the Goodhart
+slope \emph{within} agent.
+\end{proposition}
+
+\begin{proposition}[v1: no instrument is independent]
+\label{prop:indep}
+In v1 the reward model, the independent-quality probe, the Shapley value oracle
+and \JUDGE{} are the same deployment under different prompts. The probe is
+therefore independent in \emph{rubric} only, not in \emph{model}, and inherits
+shared failure modes, including self-preference \citep{panickssery2024llm}. The
+fix routes the probe, \JUDGE{} and the value oracle to a separately configurable
+deployment (\code{AZURE\_OPENAI\_DEPLOYMENT\_PROBE}); when it differs from the
+policy model the instruments become independent in model as well as rubric.
+\end{proposition}
+
+% =============================================================================
+\section{Five Fixes}
+\label{sec:fixes}
+% =============================================================================
+Each defect above is repaired by a small, local change to the single-file
+runtime. All are on the default path; none changes the compute budget of
+\S\ref{sec:compute}.
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=2pt,topsep=2pt]
+\item \textbf{Bandit reachability + persistence} (Prop.~\ref{prop:bandit}). Arms
+      are \emph{optimistically initialised} (each seeded at the top of the reward
+      scale with one pseudo-count) so the UCB1 bound is evaluated on every pull;
+      ties break uniformly at random rather than by declaration order; and the
+      learned per-arm means \emph{persist across sessions} in a small on-disk
+      store keyed by agent. A single session gives an agent only $R\le 8$ pulls
+      over $8$ arms---too few to learn---so persistence is what makes the bandit
+      more than decoration.
+\item \textbf{Best-of-$4$} (Prop.~\ref{prop:emp}). The default $N$ rises from $2$
+      to $4$. Because proposal and scoring are each one batched call regardless
+      of $N$ (\S\ref{sec:compute}), this costs no extra model calls; it also
+      lifts the empowerment statistic out of its $N{=}2$ degeneracy, and the
+      \code{metrics} event now carries an \code{informative} flag that is false
+      whenever $N<3$.
+\item \textbf{Multi-sample Shapley with an interval}
+      (Prop.~\ref{prop:shapley}). The three coalition values are drawn in one
+      batched call, repeated (default three times) and averaged, cutting the
+      value-oracle noise by $\sqrt{m}$; a $95\%$ interval and a note are emitted,
+      and a share is withheld when a coalition value is non-superadditive.
+\item \textbf{Significance-gated, within-agent Goodhart test}
+      (Prop.~\ref{prop:marginal}). The proxy and independent slopes are estimated
+      \emph{within} agent (removing the alternating level offset) and the monitor
+      fires only when their difference exceeds $2$ standard errors, so a short,
+      noisy run no longer trips it by chance.
+\item \textbf{Independent instruments + wired-in perception}
+      (Props.~\ref{prop:indep},~\ref{rem:symbolic}). The probe, \JUDGE{} and the
+      value oracle route to a separately configurable deployment; and each
+      persona's \code{vision\_r} now bounds how much of the accumulated canvas
+      enters that agent's prompt (the reward model and probes still score the
+      full canvas), so the declared perceptual parameter finally changes
+      behaviour.
+\end{enumerate}
+
+The rest of the paper measures both versions. We write \textbf{v1} for the
+audited original and \textbf{full} for the fixed default.
+
+% =============================================================================
+\section{Ablation Study}
+\label{sec:ablation}
+% =============================================================================
+\subsection{Why simulate}
+Answering ``what does each RL component contribute?'' requires thousands of
+sessions. A live session costs $12R+4$ frontier-model calls and several minutes;
+$4{,}000$ sessions per configuration across $12$ configurations is infeasible.
+More importantly, live sessions confound the question: the reward model's noise
+level---the single parameter that governs how much best-of-$N$ can possibly
+buy---is unknown and unmeasurable in situ.
+
+We therefore replace exactly two things with a stochastic oracle: the reward
+model and the quality probes. \textbf{Everything else is the shipping code}:
+\code{Bandit.select}/\code{update}, \code{scalar\_reward},
+\code{empowerment\_from\_rewards}, the slope estimator, the Goodhart rule of
+Eq.~\ref{eq:goodhart}, the Shapley formula of Eq.~\ref{eq:shapley}, the $4.5$
+Reflexion trigger and the round caps are imported directly from
+\file{canvasmind\_app.py}.
+
+\subsection{The oracle}
+A strategy $s$ has a \emph{stable} quality effect $\mu_s$ drawn once and shared
+by every session, plus a \emph{transient} per-session effect $b_s$. The stable
+part is what a cross-session learner can discover; the transient part it cannot.
+For a candidate $j$ proposed under $s$:
+\begin{align}
+\mu_s &\sim \mathcal{N}(0,\beta_{\!s}^2) \quad \text{(drawn once, global)}\nonumber\\
+b_s &\sim \mathcal{N}(0,\beta^2) \quad \text{(fresh per session)}\nonumber\\
+g_j &\sim \mathcal{N}(0,\tau_c^2) \quad \text{(candidate merit)}\nonumber\\
+d_{jk} &= \mu + \mu_s + b_s + g_j + \xi_{jk},\ \ \xi_{jk}\sim\mathcal{N}(0,\tau_d^2)\\
+\hat{s}_{jk} &= d_{jk} + \epsilon_{jk},\quad \epsilon_{jk}\sim\mathcal{N}(0,\sigma^2)\nonumber
+\end{align}
+clipped to $[0,10]$. The agent observes only $\hat{s}$ and maximises
+$r_a = w_a \cdot \hat{s}$. The \emph{true holistic quality} is
+$u_j = \frac{1}{5}\sum_k d_{jk}$---the uniform mean that \emph{no agent
+optimises}. \JUDGE{} is an unbiased noisy observer of the session mean of $u$.
+Defaults: $\mu{=}6.5$, $\tau_c{=}0.6$, $\tau_d{=}1.0$, $\sigma{=}1.0$,
+$\beta{=}0.5$, $\beta_{\!s}{=}0.6$, $\sigma_J{=}\sigma_I{=}1.0$, Reflexion bonus
+$0.3$. A reward-hacking rate $h$ (default $0$) inflates the proxy by $h\cdot t$
+while leaving $u$ untouched, so we can measure the monitor's power. \S\ref{sec:results}
+reports the sensitivity to $\beta_{\!s}$ explicitly, including $\beta_{\!s}{=}0$
+(exchangeable strategies), where the bandit provably cannot help.
+
+We run $4{,}000$ sessions per configuration at $R = 5$ (ten turns), seeded, and
+report means with $95\%$ confidence half-widths. Persistent-bandit configs are
+warmed up (unmeasured) before measurement so we report steady state.
+
+\subsection{Configurations}
+\textbf{Full} is the fixed system as shipped (best-of-$4$; optimistic,
+persistent bandit). \textbf{v1} is the audited original (best-of-$2$; per-session
+round-robin). \textbf{No RL} is the pre-RL painter: one candidate, no reward
+model, no strategy, no Reflexion, four calls per turn. The remainder remove or
+replace one component of \textbf{full} at a time.
+
+% =============================================================================
+\section{Results}
+\label{sec:results}
+% =============================================================================
+
+\begin{table*}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Configuration} & \textbf{\JUDGE{} composite} & \textbf{True quality} &
+\textbf{Proxy reward} & \textbf{Wedge} & \textbf{$\Delta$ vs.\ no-RL} & \textbf{Calls}\\
+\midrule
+Full system (fixed, as shipped)       & $\mathbf{8.14 \pm 0.03}$ & 8.18 & 8.46 & $+0.28$ & $\mathbf{+1.66}$ & 64\\
+v1 (audited, pre-fix)                  & $6.43 \pm 0.03$ & 6.44 & 6.63 & $+0.20$ & $-0.05$ & 64\\
+No RL layer (pre-RL painter)          & $6.48 \pm 0.03$ & 6.50 & 6.49 & $-0.01$ & \phantom{$+$}0.00 & \textbf{41}\\
+\midrule
+$-$ best-of-$N$ ($N{=}1$, bandit on)  & $7.55 \pm 0.04$ & 7.58 & 7.54 & $-0.04$ & $+1.07$ & 54\\
+$-$ reward model (random pick)        & $7.56 \pm 0.04$ & 7.58 & 7.54 & $-0.04$ & $+1.07$ & 64\\
+$-$ persistence (per-session bandit)  & $6.94 \pm 0.03$ & 6.96 & 7.31 & $+0.35$ & $+0.46$ & 64\\
+$-$ the fix (v1 round-robin bandit)   & $6.69 \pm 0.03$ & 6.71 & 7.07 & $+0.36$ & $+0.21$ & 64\\
+$-$ bandit (random strategy)          & $6.92 \pm 0.03$ & 6.95 & 7.30 & $+0.35$ & $+0.44$ & 64\\
+$-$ misalignment (uniform weights)    & $8.19 \pm 0.03$ & 8.23 & 8.38 & $+0.15$ & $+1.71$ & 64\\
+$-$ Reflexion                         & $8.14 \pm 0.03$ & 8.18 & 8.46 & $+0.28$ & $+1.66$ & 64\\
+\midrule
+$+$ stable-oracle strategy (learnable ceiling) & $8.14 \pm 0.03$ & 8.18 & 8.46 & $+0.28$ & $+1.66$ & 64\\
+$+$ per-session oracle (clairvoyant)  & $8.19 \pm 0.03$ & 8.24 & 8.51 & $+0.28$ & $+1.71$ & 64\\
+$+$ best-of-$8$                       & $8.33 \pm 0.03$ & 8.38 & 8.76 & $+0.38$ & $+1.85$ & 64\\
+\bottomrule
+\end{tabular}}
+\caption{Main ablation. $4{,}000$ simulated sessions per row, $R{=}5$; \textbf{full}
+uses the fixed defaults ($N{=}4$, optimistic persistent bandit), \textbf{v1} the
+audited originals. \emph{True quality} is the uniform five-dimension mean no agent
+optimises; \emph{wedge} $=$ proxy $-$ truth; \emph{Calls} counts model calls per
+session. The audited v1 is statistically indistinguishable from the pre-RL
+painter ($-0.05$); the fixes lift it to $+1.66$ at the same compute, and \full{}
+reaches the learnable ceiling (stable-oracle). Removing persistence collapses the
+bandit's contribution ($+1.66\!\to\!+0.46$); reverting to the v1 round-robin
+collapses it further ($+0.21$).}
+\label{tab:main}
+\end{table*}
+
+\subsection{The audited system did nothing; the fixes deliver $+1.66$}
+Under the default oracle the audited \textbf{v1} scores $6.43 \pm 0.03$ against
+the pre-RL painter's $6.48 \pm 0.03$: a difference of $-0.05$, i.e.\ \emph{no net
+benefit} despite $1.56\times$ the compute (Table~\ref{tab:main}). Its best-of-$2$
+selection gain is cancelled by the round-robin bandit spending turns on
+below-average strategies. The fixed system reaches $8.14 \pm 0.03$: $+1.66$
+composite points over baseline, at the \emph{same} $64$ calls.
+
+Decomposing that $+1.66$: dropping best-of-$N$ to $N{=}1$ (keeping the fixed
+bandit) still gives $+1.07$, and dropping the reward model (random pick among the
+four) also gives $+1.07$---so best-of-$N$ is worth $+1.66-1.07 = +0.59$, and the
+now-functional bandit is worth $+1.07$. The bandit's value is entirely in the
+\emph{persistence} fix: a per-session optimistic bandit gives only $+0.46$, and
+reverting to the exact v1 round-robin gives $+0.21$. \full{} matches the
+stable-oracle ($+1.66$ vs.\ $+1.66$), i.e.\ the repaired bandit captures
+essentially all of the learnable strategy structure; the clairvoyant per-session
+oracle, which also knows each session's transient effect, reaches only marginally
+higher ($+1.71$), confirming little more is extractable online. Removing the
+misalignment improves true quality slightly ($+1.71$), as it must; removing
+Reflexion changes nothing ($+1.66$).
+
+\subsection{Best-of-$N$ matches the closed form}
+Selection under a noisy proxy has a classical expected gain
+$\rho\,\tau_u\,\mathbb{E}[Z_{(N)}]$, where $\rho$ is the correlation between the
+agent's proxy and true quality, $\tau_u = \mathrm{sd}(u)$, and $Z_{(N)}$ is the
+maximum of $N$ standard normals. With the shipped weights, $\bar\rho = 0.785$ and
+$\tau_u = 0.748$. Table~\ref{tab:bon} shows measured gains tracking the
+prediction across $N \in \{1,2,4,8\}$ with a maximum absolute error of $0.029$
+(at $N{=}8$, where clipping to $[0,10]$ bites hardest)---a strong check that the
+harness measures the intended quantity. This component is independent of the
+strategy machinery, so its contribution ($\approx\!+0.6$) is the same in v1 and
+in \full{}; only the shipped $N$ differs ($2$ vs.\ $4$).
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}ccccc@{}}
+\toprule
+$N$ & $\mathbb{E}[Z_{(N)}]$ & \textbf{Gain (meas.)} & \textbf{Gain (pred.)} & \textbf{Wedge}\\
+\midrule
+1 & 0.000 & 0.000 & 0.000 & $-0.01$\\
+2 & 0.564 & 0.314 & 0.331 & $+0.19$\\
+4 & 1.029 & 0.583 & 0.604 & $+0.35$\\
+8 & 1.424 & 0.807 & 0.836 & $+0.48$\\
+\bottomrule
+\end{tabular}}
+\caption{Test-time compute scaling. Measured true-quality gain vs.\ the closed
+form $\bar\rho\,\tau_u\,\mathbb{E}[Z_{(N)}]$. All four rows cost the \emph{same}
+number of model calls (\S\ref{sec:compute}); only output tokens grow.}
+\label{tab:bon}
+\end{table}
+
+\subsection{Best-of-$N$ manufactures a Goodhart wedge}
+The proxy rises about $1.6\times$ faster than truth: from $N{=}1$ to $N{=}2$ the
+proxy gains $0.53$ while true quality gains $0.31$. This is not a pathology of
+the agents; it is arithmetic. Selection on $\hat{s} = u + \epsilon$ inflates the
+observed maximum by $\mathrm{sd}(\hat{s})\,\mathbb{E}[Z_{(N)}]$ but the true
+value by only $\rho\,\tau_u\,\mathbb{E}[Z_{(N)}]$. The residual is exactly the
+wedge the Goodhart monitor watches for---so best-of-$N$, a genuine improvement,
+also \emph{generates} the divergence signal. Table~\ref{tab:sigma} makes the
+trade explicit: as the reward model degrades, real gain falls while the wedge
+grows. This is why the fixed monitor gates on statistical significance rather
+than the raw wedge (\S\ref{sec:goodhart}).
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ccccc@{}}
+\toprule
+$\sigma$ & \textbf{Full} & \textbf{No RL} & \textbf{Gain} & \textbf{Wedge}\\
+\midrule
+0.25 & 8.30 & 6.50 & $+1.80$ & $+0.10$\\
+0.50 & 8.27 & 6.50 & $+1.77$ & $+0.15$\\
+1.00 & 8.18 & 6.50 & $+1.69$ & $+0.28$\\
+1.50 & 8.09 & 6.50 & $+1.60$ & $+0.42$\\
+2.00 & 8.02 & 6.50 & $+1.52$ & $+0.52$\\
+3.00 & 7.91 & 6.50 & $+1.42$ & $+0.64$\\
+\bottomrule
+\end{tabular}}
+\caption{Sensitivity to reward-model noise $\sigma$ (\full{} vs.\ no-RL). A worse
+reward model buys less true quality and opens a wider proxy--truth wedge, but the
+fixed system stays well above baseline throughout.}
+\label{tab:sigma}
+\end{table}
+
+\subsection{The bandit fix: from inert to the largest single contributor}
+In v1 the bandit is a round-robin whose UCB1 bound is never evaluated
+(Prop.~\ref{prop:bandit}); Table~\ref{tab:ucb} shows the argmax branch firing
+zero times up to $8$ pulls, while the fixed bandit evaluates the bound on every
+pull. The consequence for quality is large. Reverting \full{}'s bandit to the v1
+round-robin drops its benefit from $+1.66$ to $+0.21$; using a fixed
+\emph{per-session} optimistic bandit (no persistence) gives $+0.46$. Persistence
+is the load-bearing part: only a bandit that accumulates across sessions gets
+enough pulls to learn, since one session offers just $R\le 8$ over $8$ arms.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Pulls} & \textbf{v1 argmax evals} & \textbf{v1 round-robin?} & \textbf{fixed evals}\\
+\midrule
+1--8 & 0  & yes & = pulls\\
+9    & 1  & no  & 9\\
+10   & 2  & no  & 10\\
+\bottomrule
+\end{tabular}}
+\caption{UCB1 reachability, checked on both bandits. v1 never consults the
+confidence bound until it has exhausted all $8$ arms (past the round cap); the
+fixed bandit consults it on every pull (Prop.~\ref{prop:bandit},
+\S\ref{sec:fixes}).}
+\label{tab:ucb}
+\end{table}
+
+Figure~\ref{fig:bandit} traces the fixed persistent bandit's \emph{learning
+curve}: starting cold at the random floor ($6.95$), it climbs to $98\%$ of the
+learnable headroom (the stable-oracle ceiling, $8.16$) within about $50$
+sessions, while the v1 round-robin stays flat at $6.70$ forever.
+
+\begin{figure}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}[x=1.9mm,y=16mm]
+  \draw[ax,->] (-1,6.6) -- (56,6.6) node[right,tick]{sessions};
+  \draw[ax,->] (-1,6.6) -- (-1,8.45);
+  \foreach \x in {0,10,25,50} \draw[ax] (\x,6.58) -- (\x,6.62) node[below=1pt,tick]{\x};
+  \foreach \y in {6.8,7.2,7.6,8.0} \draw[ax] (-1.7,\y) -- (-0.3,\y) node[left=1pt,tick]{\y};
+  \draw[judge,line width=0.8pt,densely dotted] (-1,8.16) -- (55,8.16);
+  \node[tick,text=judge,anchor=east] at (55,8.33) {stable-oracle ceiling ($8.16$)};
+  \draw[soft,line width=0.8pt,dashed] (-1,6.70) -- (55,6.70);
+  \node[tick,text=soft,anchor=east] at (55,6.86) {v1 round-robin, never learns ($6.70$)};
+  \draw[aria,line width=1pt]
+    (0,6.94) -- (2,7.17) -- (5,7.49) -- (10,7.74) -- (25,8.04) -- (50,8.13);
+  \foreach \x/\y in {0/6.94,2/7.17,5/7.49,10/7.74,25/8.04,50/8.13}
+    \fill[aria] (\x,\y) circle (0.5mm);
+  \node[tick,text=aria,anchor=west] at (16,7.55) {fixed persistent bandit};
+\end{tikzpicture}}
+\caption{Bandit learning curve at $R{=}5$. The fixed persistent bandit (solid)
+rises from the random floor ($6.95$) to $98\%$ of the learnable ceiling within
+$\sim\!50$ sessions; v1's round-robin (dashed) cannot learn and stays flat. The
+gap between the ceiling and the floor is the headroom the persistence fix unlocks.}
+\label{fig:bandit}
+\end{figure}
+
+\subsection{But the bandit's value is bounded by learnable structure}
+This benefit is not free of assumptions. A bandit can only help if some
+strategies are genuinely better \emph{on average}---if the strategy space has a
+stable ranking to learn. Table~\ref{tab:stable} sweeps that structure
+($\beta_{\!s}$). At $\beta_{\!s}{=}0$ (exchangeable strategies, the oracle of a
+plausible worst case) the fixed bandit contributes $+0.03$: nothing, exactly as
+Prop.~\ref{prop:bandit} would leave it, and the RL benefit reduces to
+best-of-$N$'s $+0.6$---\emph{recovering the finding one would draw from v1 alone}.
+As $\beta_{\!s}$ grows the bandit's contribution rises to $+1.4$, while
+best-of-$N$'s stays near $+0.6$ throughout. Tellingly, v1's net benefit
+\emph{falls} with more structure (to $-0.12$ at $\beta_{\!s}{=}0.9$): the more
+there is to learn, the more its round-robin loses by refusing to.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ccccc@{}}
+\toprule
+$\beta_{\!s}$ & \textbf{v1 $\Delta$} & \textbf{full $\Delta$} & \textbf{best-of-$N$} & \textbf{bandit}\\
+\midrule
+0.0 & $+0.33$ & $+0.66$ & $+0.62$ & $+0.03$\\
+0.2 & $+0.23$ & $+0.91$ & $+0.58$ & $+0.32$\\
+0.4 & $+0.13$ & $+1.23$ & $+0.58$ & $+0.64$\\
+0.6 & $+0.03$ & $+1.54$ & $+0.57$ & $+0.96$\\
+0.9 & $-0.12$ & $+1.98$ & $+0.55$ & $+1.43$\\
+\bottomrule
+\end{tabular}}
+\caption{Contribution of each component vs.\ the stable strategy structure
+$\beta_{\!s}$ ($R{=}5$, true-quality deltas over no-RL). best-of-$N$ is
+structure-independent; the (fixed) bandit's value grows from nothing to $+1.4$;
+v1's total benefit shrinks and turns negative. The paper's default is
+$\beta_{\!s}{=}0.6$; the honest bounds are the $\beta_{\!s}{=}0$ row (bandit
+worthless) and the growth to its right.}
+\label{tab:stable}
+\end{table}
+
+\subsection{Reflexion still rarely fires}
+The fixes raise typical rewards, so the $<4.5$ Reflexion trigger fires even less
+than in v1: at $\mu = 6.5$ it fires on under $0.1\%$ of turns, rising only as
+briefs get hard ($0.5\%$ at $\mu{=}4.5$). Removing it changes the composite by
+$<0.01$. The mechanism is well-formed but dormant on well-posed briefs; it is
+retained as a safety valve, not a driver.
+
+\subsection{Empowerment: fixed by moving off $N=2$}
+The shipping \code{empowerment\_from\_rewards} agrees with the closed form of
+Proposition~\ref{prop:emp} to within $5\times10^{-4}$ (rounding). At $N{=}2$ the
+statistic is a monotone decreasing function of $|r_1 - r_2|$ and nothing else
+(Figure~\ref{fig:emp}): agents with rewards $(9,8)$ and $(3,2)$ get
+\emph{identical} empowerment $0.956$. The fix raises the default to $N{=}4$,
+where the softmax has three degrees of freedom and the statistic is no longer a
+function of a single gap; the \code{metrics} event also flags
+\code{informative}${=}$false whenever $N<3$, so a degenerate reading is never
+shown as if it meant something.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[x=6.4mm,y=26mm]
+  \draw[ax,->] (0,0) -- (10.6,0) node[right,tick]{$|r_1-r_2|$};
+  \draw[ax,->] (0,0) -- (0,1.14) node[above,tick]{$E$ (bits)};
+  \foreach \x in {0,2,4,6,8,10} \draw[ax] (\x,-0.02) -- (\x,0.02) node[below=2pt,tick]{\x};
+  \foreach \y in {0,0.5,1} \draw[ax] (-0.1,\y) -- (0.1,\y) node[left=1pt,tick]{\y};
+  \draw[ink!40,densely dotted] (0,1) -- (10.4,1);
+  \draw[aria,line width=1pt]
+    (0.00,1.000) -- (0.25,0.997) -- (0.50,0.989) -- (0.75,0.975) -- (1.00,0.956) --
+    (1.25,0.933) -- (1.50,0.905) -- (1.75,0.874) -- (2.00,0.840) -- (2.25,0.803) --
+    (2.50,0.765) -- (2.75,0.726) -- (3.00,0.685) -- (3.25,0.645) -- (3.50,0.605) --
+    (3.75,0.566) -- (4.00,0.527) -- (4.25,0.490) -- (4.50,0.454) -- (4.75,0.420) --
+    (5.00,0.387) -- (5.50,0.328) -- (6.00,0.275) -- (6.50,0.230) -- (7.00,0.191) --
+    (7.50,0.158) -- (8.00,0.130) -- (8.50,0.107) -- (9.00,0.087) -- (9.50,0.071) --
+    (10.00,0.058);
+\end{tikzpicture}
+\caption{Empowerment at $N{=}2$ is $H_b(\sigma(\delta/2))$, a deterministic
+function of the reward gap (Prop.~\ref{prop:emp}). The curve is not fitted; it is
+the closed form, and the shipping code lands on it.}
+\label{fig:emp}
+\end{figure}
+
+\subsection{The Goodhart monitor: fewer false alarms}
+\label{sec:goodhart}
+v1's raw-threshold rule fired on $9.7\%$ of ten-turn sessions under the null,
+because on a short horizon the OLS slope is noisy enough to clear $0.05$ by
+chance, and because it regressed an alternating mixture of \ARIA{}'s and
+\NEXUS{}'s objectives (Prop.~\ref{prop:marginal}). The fix estimates both slopes
+\emph{within} agent and requires the divergence to exceed $2$ standard errors.
+The false-positive rate drops to $5.1\%$ at ten turns and $0.5\%$ at sixteen,
+while power is retained or improved ($41.3\%$ at $h{=}0.10$, ten turns, vs.\
+$37.2\%$ for v1; Table~\ref{tab:goodhart}). A verdict of ``reward hacking'' from
+a single ten-turn run is still only suggestive, and the emitted string now says
+so when the divergence is present but not significant.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ccccc@{}}
+\toprule
+\textbf{Hack $h$} & \multicolumn{2}{c}{\textbf{10 turns}} & \multicolumn{2}{c}{\textbf{16 turns}}\\
+ & v1 & fixed & v1 & fixed\\
+\midrule
+0.00 (FP) & 9.7\% & \textbf{5.1\%} & 1.6\% & \textbf{0.5\%}\\
+0.10      & 37.2\% & 41.3\% & 41.7\% & 49.7\%\\
+0.20      & 74.1\% & 80.3\% & 94.6\% & 96.4\%\\
+0.30      & 94.0\% & 95.8\% & 99.9\% & 100\%\\
+0.50      & 100\% & 100\% & 100\% & 100\%\\
+\bottomrule
+\end{tabular}}
+\caption{Goodhart detection rate, $4{,}000$ sessions per cell. The $h{=}0$ rows
+are false-positive rates. The significance-gated within-agent test (fixed) halves
+the false-alarm rate while keeping---slightly improving---power.}
+\label{tab:goodhart}
+\end{table}
+
+\subsection{Shapley credit: still noisy, but now honest about it}
+With a symmetric ground truth ($50/50$), v1's single-query value oracle at noise
+$\sigma_v = 1.0$ yields an \ARIA{} share of $50.0 \pm 16.7$ percentage
+points---a reported $58/42$ split is no evidence of asymmetric contribution. The
+fix averages $m{=}3$ batched samples, scaling the noise by $1/\sqrt{3}$ and
+narrowing the interval to $\pm 9.4$~pp (Table~\ref{tab:shapley}); it also emits
+the interval and withholds a share when a coalition value is non-superadditive
+(Prop.~\ref{prop:shapley}). The estimate is more trustworthy and, crucially,
+carries its own error bar. Fundamentally, credit from a noisy value oracle is
+hard; the fix does not pretend otherwise.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ccc@{}}
+\toprule
+$\sigma_v$ & \textbf{v1 $\pm95\%$ (pp)} & \textbf{fixed $\pm95\%$ (pp)}\\
+\midrule
+0.5 & \phantom{0}8.1 & \phantom{0}4.7\\
+1.0 & 16.7 & \phantom{0}9.4\\
+1.5 & 26.1 & 14.3\\
+2.0 & 37.0 & 19.5\\
+\bottomrule
+\end{tabular}}
+\caption{Half-width of the $95\%$ interval on \ARIA{}'s Shapley share (ground
+truth $50.0$) under a noisy value oracle. Averaging $3$ batched samples (fixed)
+narrows it by $\sqrt{3}$ over v1's single query at no extra model calls.}
+\label{tab:shapley}
+\end{table}
+
+\subsection{What misalignment costs, and why keep it}
+Uniform weights would raise true quality by $0.04$ at the default oracle, and by
+$0.14$ when dimensions are highly idiosyncratic ($\tau_d/\tau_c = 6$). The
+misalignment is thus a small tax on the quality target---paid deliberately. Its
+purpose is not quality but \emph{tension}: the agents rank the same candidate
+differently, so the Pareto trace and the negotiation the interface exists to
+display are real rather than decorative. We report the price rather than
+pretending it is free.
+
+% =============================================================================
+\section{Human-Study Protocol}
+\label{sec:human}
+% =============================================================================
+No human evaluation has been conducted. The instrumentation is specified here so
+that the study is pre-registered rather than reverse-engineered.
+
+\paragraph{Participants and pre-session form.}
+Before the interface loads: age, gender, and self-rated expertise in art.
+
+\paragraph{Design.}
+Within-subjects, two conditions (dual with RL layer; Quad without), order
+counterbalanced, one brief each, briefs randomised from the AI-Surprise pool.
+
+\paragraph{Post-session survey ($\ge 10$ items).}
+Six items on a $1$--$10$ numeric scale (e.g.\ ``How close was the image to the
+version you imagined?'') and six five-point Likert items
+\citep{likert1932technique} spanning ownership, surprise, perceived
+collaboration, and trust. The Creativity Support Index
+\citep{cherry2014quantifying} supplies validated sub-scales for expressiveness,
+exploration and immersion.
+
+\paragraph{Artwork quality.}
+Blind Consensual Assessment Technique \citep{amabile1982social} with $\ge 3$
+independent raters on the final canvases, yielding a human composite that can be
+regressed against \JUDGE{}'s---the only way to establish whether the LLM
+composite tracks anything (Prop.~\ref{prop:indep}).
+
+\paragraph{Persistence.}
+The system implements this: every session opens a numbered directory
+\file{data/sessions/session\_$\langle N\rangle$/} holding \file{session.json} (a
+manifest), a \file{json/} tree (an ordered \file{events.jsonl}, an
+\file{llm\_calls.jsonl} logging every prompt, raw response and latency, a
+per-turn record with the reasoning and its timestamp, the candidates and their
+rewards, the retrieved memories, the final memory streams, the critic and the
+metrics), and an \file{images/} folder with every step PNG and the final canvas.
+A thread-local recorder lets the Azure wrappers log themselves, so capture needs
+no change at the call sites. The pre-session form and the post-session survey are
+written into the same directory, making each session a self-contained, auditable
+record.
+
+% =============================================================================
+\section{Conclusion}
+% =============================================================================
+CanvasMind makes multi-agent creative negotiation legible: one canvas, one object
+per turn, every intermediate state shown, and a research dashboard that reports
+the machinery's own accounting of credit, agency and reward hacking.
+
+The value of this paper is what happened when we held that dashboard to the
+standard its instruments imply. The audit found that the system \emph{as
+originally written} did essentially nothing---$-0.05$ composite points over a
+pre-RL painter---because its headline mechanism, the UCB1 bandit, was provably
+inert at the shipped horizon, and its remaining instruments (empowerment,
+Goodhart, Shapley) were degenerate, false-alarm-prone, or uninformative. Each
+failure came with a proof and a measurement, not an assertion.
+
+Then we fixed them, and the same harness shows the repaired system reaching
+$+1.66$ composite points at the \emph{same} compute: $\sim\!+0.6$ from best-of-$N$
+(free in calls) and $\sim\!+1.1$ from a bandit that now actually learns and
+persists what it learns, converging to $98\%$ of the achievable ceiling within
+$\sim\!50$ sessions. We were careful to bound the claim: the bandit's value is
+worth nothing when strategies are exchangeable and grows with the stable
+structure the strategy space has, and we report that dependence in full.
+
+The lesson is not that instrumented agent systems are untrustworthy, but that
+their instruments must themselves be audited---and can be, cheaply, by reusing
+the shipping decision code under a controlled reward environment. We built the
+dashboard, audited it, fixed it, and re-ran the audit. That loop, not any single
+number, is the contribution.
+
+% =============================================================================
+\section*{Ethics Statement}
+% =============================================================================
+The system generates images with a hosted model and inherits its training-data
+provenance, biases and content-policy behaviour; we make no claim to originality
+of the underlying generative process. The eight personas are fictional
+composites, not real individuals, and are designed to span occupations and ages
+rather than to stereotype: a persona's occupation shapes the objects it proposes
+and nothing else. Because a persona conditions an artistic voice, deploying this
+system with personas keyed to protected attributes would risk essentialising
+those attributes, and we do not do so.
+
+The autonomy control permits an agent to \emph{resist} a human directive. This is
+an aesthetic device in a painting installation, and we note plainly that it is
+implemented as an instruction in a prompt, not as an enforced constraint: it
+should not be read as evidence about controllability of agentic systems in
+consequential settings.
+
+Any human study following \S\ref{sec:human} requires informed consent, the right
+to withdraw, and storage of survey responses separated from identifying
+information. The per-session records described there contain participant-authored
+prompts and must be treated as personal data.
+
+% =============================================================================
+\section*{Acknowledgments}
+% =============================================================================
+We thank the reviewers of the internal technical review for pressing on the
+question that produced \S\ref{sec:analysis}: not whether the system works, but
+which part of it does.
+
+% References are embedded (author-year, natbib) so they always render with a
+% plain pdflatex run -- no bibtex needed. custom.bib is still provided for anyone
+% who prefers the bibtex workflow (\bibliography{custom}).
+\input{references_embedded.tex}
+
+\appendix
+\clearpage
+
+% =============================================================================
+\section{Hyperparameters}
+\label{app:hyper}
+% =============================================================================
+\begin{table}[!ht]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Constant} & \textbf{Meaning} & \textbf{Value}\\
+\midrule
+\code{RECENCY\_DECAY}     & $\gamma$, per-turn decay      & 0.995\\
+\code{REFLECT\_THRESHOLD} & $\Theta$, reflection trigger  & 10.0\\
+\code{RETRIEVE\_K}        & default retrieval budget      & 5\\
+\code{BEST\_OF\_N}        & candidates per turn (fixed)   & \textbf{4}\\
+\code{UCB\_C}             & UCB1 exploration constant     & 1.4\\
+\code{BANDIT\_PRIOR\_MEAN}& optimistic init (fixed)       & 10.0\\
+\code{BANDIT\_PERSIST}    & persist across sessions (fixed)& on\\
+\code{SHAPLEY\_REPEATS}   & value-oracle samples (fixed)  & 3\\
+\code{GOODHART\_SIGMA}    & significance gate (fixed)     & 2.0\\
+$|S|$                     & artistic strategies (arms)    & 8\\
+---                       & Reflexion reward trigger      & $<4.5$\\
+---                       & Goodhart proxy-slope floor    & 0.05\\
+---                       & Goodhart divergence margin    & 0.10\\
+---                       & autonomy resistance threshold & 0.66\\
+$T$                       & empowerment temperature       & 2.0\\
+---                       & empowerment informative iff   & $N\ge 3$\\
+---                       & dual rounds $R$ (default 5)   & $[1,8]$\\
+---                       & quad rounds $R$ (default 1)   & $[1,6]$\\
+---                       & \code{vision\_r} percept.\ clamp & $[3,12]$\\
+---                       & \code{att\_bandwidth} clamp   & $[2,12]$\\
+---                       & \code{retention} clamp        & $[2,12]$\\
+---                       & importance fallback           & 4\\
+---                       & reflection-memory importance  & 6\\
+---                       & \code{ArtHistoryRAG} KB size  & 16\\
+---                       & \code{ArtHistoryRAG} max hits & 3\\
+---                       & image size                    & $1024^2$\\
+\bottomrule
+\end{tabular}}
+\caption{Every tunable constant in the shipped runtime; \textbf{bold}/``(fixed)''
+mark values introduced by the fixes of \S\ref{sec:fixes}. Temperature is never
+sent; the deployment default is used.}
+\end{table}
+
+\paragraph{Token budgets.}
+\code{max\_completion\_tokens} is $1800$ for painter and \JUDGE{} calls, $900$
+for candidate proposal, $600$ for reward scoring, $400$ for reflection insights
+and brief invention, $200$ for importance scoring and reflection questions, and
+$20$ for the independent probe and the Shapley value oracle.
+
+% =============================================================================
+\section{Event and API Contract}
+% =============================================================================
+\begin{table}[!ht]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Endpoint} & \textbf{Purpose}\\
+\midrule
+\code{GET /api/health}        & model + capability probe\\
+\code{GET /api/personas}      & the eight persona specs\\
+\code{GET /api/inspire}       & AI invents brief $+$ style\\
+\code{POST /api/start}        & start a dual session\\
+\code{GET /api/stream/\{id\}} & SSE event stream\\
+\code{POST /api/stop/\{id\}}  & halt turns; \JUDGE{} evaluates\\
+\code{GET /api/quad/personas} & voices $+$ identities\\
+\code{POST /api/quad/start}   & start a quad session\\
+\code{GET /api/sessions}      & list recorded sessions\\
+\code{GET /api/sessions/\{n\}}& one session's manifest + index\\
+\code{POST .../participant}   & save the pre-session form\\
+\code{POST .../survey}        & save the post-session survey\\
+\code{GET /}                  & the embedded single-page UI\\
+\bottomrule
+\end{tabular}}
+\caption{HTTP surface (abridged). All browser fetches use relative
+\code{api/...} paths so a reverse-proxy sub-path prefix is preserved.}
+\end{table}
+
+\noindent\textbf{SSE event types.} \code{session}, \code{turn}, \code{agent},
+\code{reflection}, \code{image\_pending}, \code{image}, \code{critic},
+\code{final}, \code{metrics}, \code{summary}, \code{warning}, \code{error},
+\code{done}. The \code{agent} event carries an \code{rl} block with the chosen
+reward, the five reward dimensions, the strategy, the rejected candidates, the
+empowerment value, the independent-quality probe and a \code{resisted\_human}
+flag.
+
+% =============================================================================
+\section{Dual vs.\ Quad}
+% =============================================================================
+\begin{table}[!ht]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}lcc@{}}
+\toprule
+ & \textbf{Dual} & \textbf{Quad}\\
+\midrule
+Agents                & 2 & 4\\
+Order                 & alternating & strict sequence\\
+Rounds                & $[1,8]$ & $[1,6]$\\
+Images per session    & $2R$ & $4R$\\
+Memory stream         & yes & no\\
+Reward model          & yes & no\\
+Best-of-$N$           & yes & no\\
+UCB1 bandit           & yes & no\\
+Shapley / empowerment & yes & no\\
+Goodhart monitor      & yes & no\\
+\code{ArtHistoryRAG}  & no  & yes\\
+\JUDGE{}              & yes & yes\\
+Calls per session     & $12R+4$ & $8R+1$\\
+\bottomrule
+\end{tabular}}
+\caption{The Quad pipeline is an architectural control: it shares the additive
+canvas, the critic and the transport, and nothing else.}
+\end{table}
+
+% =============================================================================
+\section{Reproducing Every Number}
+% =============================================================================
+Running \code{python ablation/run\_ablation.py} writes \file{ablation/results/}:
+\file{ablation\_main.csv} (Table~\ref{tab:main}), \file{bestofn\_scaling.csv}
+(Table~\ref{tab:bon}), \file{sigma\_sweep.csv} (Table~\ref{tab:sigma}),
+\file{goodhart\_roc.csv} (Table~\ref{tab:goodhart}), \file{shapley\_noise.csv}
+(Table~\ref{tab:shapley}), \file{ucb\_reachability.csv} (Table~\ref{tab:ucb},
+Prop.~\ref{prop:bandit}), \file{bandit\_learning.csv} (Figure~\ref{fig:bandit}),
+\file{stable\_sensitivity.csv} (Table~\ref{tab:stable}),
+\file{empowerment\_gap.csv} (Figure~\ref{fig:emp}, Prop.~\ref{prop:emp}),
+\file{bandit\_regret.csv}, \file{reflexion\_rate.csv},
+\file{idiosyncrasy\_sweep.csv}, and \file{summary.json}. The harness imports
+\code{Bandit}, \code{scalar\_reward}, \code{empowerment\_from\_rewards}, the
+slope estimator and \code{REWARD\_WEIGHTS} directly from
+\file{canvasmind\_app.py}; only the Azure-backed oracles are replaced. Seeds are
+fixed; $4{,}000$ sessions per configuration.
+
+\end{document}

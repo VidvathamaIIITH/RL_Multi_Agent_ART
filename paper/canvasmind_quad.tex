@@ -1,0 +1,638 @@
+% =============================================================================
+%  CanvasMind / RL_Multi_Agent — QUAD system (four-agent sequential pipeline)
+%  Self-contained ACL-format paper. Companion: canvasmind_dual.tex.
+%
+%  Compiles two ways, automatically:
+%   (a) With the official ACL style files (acl.sty, acl_natbib.bst) present.
+%   (b) Otherwise a faithful ACL-layout emulation is used, so this file always
+%       compiles on a bare TeX Live / MiKTeX / Overleaf installation.
+%  References are EMBEDDED (references_quad.tex) so a plain pdflatex run resolves
+%  every citation -- no bibtex needed.
+%
+%  Build:  pdflatex canvasmind_quad && pdflatex canvasmind_quad
+% =============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\newif\ifaclstyle
+\IfFileExists{acl.sty}{\aclstyletrue}{\aclstylefalse}
+
+\ifaclstyle
+  \usepackage[final]{acl}
+  \usepackage{times}
+\else
+  \usepackage[letterpaper,textwidth=160mm,textheight=235mm,
+              top=1in,left=1in,columnsep=6mm,footskip=6mm]{geometry}
+  \usepackage{mathptmx}
+  \usepackage{natbib}
+  \setcitestyle{authoryear,round,aysep={},yysep={;}}
+  \renewcommand{\bibsection}{\section*{References}}
+  \setlength{\bibsep}{0pt plus 0.3ex}
+\fi
+
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+
+\setlength{\emergencystretch}{3em}
+\sloppy
+\setlength{\overfullrule}{0pt}          % never draw the black overflow bar
+% shrink-to-fit: scale a box down to \linewidth ONLY if it is wider (never up)
+\newcommand{\fitwidth}[1]{\resizebox{\ifdim\width>\linewidth \linewidth\else\width\fi}{!}{#1}}
+
+% ---- palette ----------------------------------------------------------------
+\definecolor{ink}{HTML}{1F2933}
+\definecolor{a1c}{HTML}{0E7490}
+\definecolor{a2c}{HTML}{A21CAF}
+\definecolor{judge}{HTML}{B45309}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{soft}{HTML}{6B7280}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\textcolor{accent}{\texttt{\small #1}}}
+\newcommand{\JUDGE}{\textsc{Judge}}
+\newcommand{\RAG}{\code{ArtHistoryRAG}}
+
+\tikzset{
+  box/.style={rounded corners=2pt,draw=#1,line width=0.7pt,fill=#1!7,
+              text=ink,align=center,font=\scriptsize,inner sep=3.5pt,minimum height=7.5mm},
+  flow/.style={-{Stealth[length=1.8mm]},line width=0.7pt,draw=ink!70},
+  lbl/.style={font=\scriptsize\itshape,text=ink!70},
+}
+
+\newcommand{\PAPERTITLE}{CanvasMind\,--\,Quad: A Configurable Four-Agent
+  Sequential Pipeline for Legible Additive Co-Creation on a Shared Canvas}
+\newcommand{\PAPERAUTHOR}{Vidvathama Ramesh \\ RL\_Multi\_Agent Project, TCS Research}
+
+\newcommand{\ABSTRACTTEXT}{%
+We present \textbf{CanvasMind\,--\,Quad}, the four-agent variant of the CanvasMind
+co-creation system. Four \emph{independently configured} agents paint one
+\emph{shared canvas} in \textbf{strict sequence}---agent $1 \to 2 \to 3 \to 4$
+per round, each adding exactly one new object on top of the previous image, so a
+painting of $4R$ visible steps grows for $R$ rounds. Each agent is configured
+along two orthogonal axes: an \emph{artistic voice} (one of six painterly presets,
+or a free-text override) that sets how it paints, and a \emph{persona identity}
+(one of eight seed-memory characters after \citet{park2023generative}) that sets
+who it is; a lightweight deterministic retriever, \RAG{}, injects precise stylistic
+keywords when it recognises an art movement in the brief or voice. A fifth agent,
+\JUDGE{}, scores the sequential collaboration across five axes and a composite but
+never edits the canvas. Deliberately, the Quad pipeline carries \textbf{no
+reinforcement-learning layer}---no reward model, best-of-$N$, bandit, memory
+stream, or credit assignment; those live in the two-agent companion system and
+are the subject of a separate paper. This keeps Quad a clean, legible substrate
+for \emph{configurable} multi-voice co-creation: the whole run is one Python file
+serving the browser and the API on a single port over Server-Sent Events, calling
+Azure OpenAI over raw REST, and every session is persisted in full for audit. We
+describe the architecture, the agent configuration, the additive image pipeline,
+the storage format, and how Quad relates to its RL-bearing companion. We are
+explicit that no live-model evaluation or human study is reported here; the system,
+its storage, and a reproducible offline harness are released as code.%
+}
+
+\title{\PAPERTITLE}
+\author{\PAPERAUTHOR}
+\date{}
+
+\begin{document}
+
+\ifaclstyle
+  \maketitle
+  \begin{abstract}\ABSTRACTTEXT\end{abstract}
+\else
+  \twocolumn[%
+    \vspace*{2pt}
+    \begin{center}
+      {\LARGE\bfseries \PAPERTITLE\par}\vspace{10pt}
+      {\large \PAPERAUTHOR\par}\vspace{12pt}
+    \end{center}
+    \begin{center}\begin{minipage}{0.86\textwidth}
+      \begin{center}\textbf{Abstract}\end{center}\vspace{-4pt}
+      \small \ABSTRACTTEXT
+    \end{minipage}\end{center}
+    \vspace{14pt}
+  ]
+\fi
+
+% =============================================================================
+\section{Introduction}
+% =============================================================================
+Prompt-to-image tools collapse creation into one call and hide the reasoning that
+produced the picture. CanvasMind makes that reasoning visible by turning creation
+into a turn-based collaboration on a \emph{single shared canvas} that is handed
+from agent to agent, each adding exactly one object. This paper describes the
+\textbf{four-agent} member of the family: a configurable pipeline in which four
+distinct painters act in a fixed order, so a viewer can watch a composition
+assemble one deliberate element at a time and can read each contributor's hand.
+
+The design goal for Quad is \emph{configurability with legibility}. Each of the
+four agents is set independently along two axes that we keep orthogonal on
+purpose: an \emph{artistic voice}---how it paints (six painterly presets, or a
+free-text description that overrides them)---and a \emph{persona identity}---who
+it is (one of eight seed-memory characters spanning walks of life, after
+\citealp{park2023generative}). A curator can therefore stage, say, a Baroque
+traditionalist voiced by a retired shipwright followed by a neon cyberpunk voiced
+by an astronomer, and see how the two sensibilities negotiate one surface. A
+deterministic keyword router, \RAG{}, sharpens each agent's prompt with precise
+stylistic vocabulary when it recognises a movement. A fifth agent, \JUDGE{},
+assesses how well the four built on one another and presents the accumulated
+canvas; it never lifts a brush.
+
+Quad deliberately omits the inference-time reinforcement-learning machinery
+(reward model, best-of-$N$ search, bandit-driven strategy selection, memory and
+credit assignment) that the two-agent companion system carries. That machinery,
+and a formal audit of it, are the subject of a separate paper; here the point is
+the opposite---a minimal, transparent, configurable substrate whose behaviour is
+fully determined by each agent's declared voice, persona, and the strict turn
+order. The clean separation also makes Quad a natural \emph{architectural control}
+for studying what the RL layer adds.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.3em,itemsep=1pt,topsep=2pt]
+\item \textbf{A configurable four-agent sequential co-creation pipeline}
+      (\S\ref{sec:overview}--\S\ref{sec:pipeline}) with orthogonal voice/persona
+      configuration and an explicit ``what I see / what I add'' JSON contract.
+\item \textbf{A deterministic art-history retriever} (\S\ref{sec:rag}) that
+      enriches prompts with movement-specific vocabulary, with a retriever-shaped
+      interface so it can later be swapped for a vector store.
+\item \textbf{A single-file, one-port runtime} (\S\ref{sec:impl}) that streams
+      every step to the browser and \textbf{persists every session in full}
+      (\S\ref{sec:storage}) for audit and later study.
+\item \textbf{An explicit positioning} (\S\ref{sec:relation}) against the
+      RL-bearing two-agent companion, making the architectural difference precise.
+\end{enumerate}
+
+\paragraph{Scope and honesty.}
+This paper describes a system. It reports \emph{no} live-model quality numbers and
+\emph{no} human study: Azure OpenAI credentials are required to run it, and a user
+study is future work. \S\ref{sec:human} specifies the instrumentation---already
+implemented---that a study would use.
+
+% =============================================================================
+\section{Related Work}
+% =============================================================================
+\paragraph{Multi-agent LLM systems.}
+Frameworks that coordinate several language-model agents
+\citep{li2023camel,hong2024metagpt,wu2024autogen,du2024debate} typically pursue a
+\emph{shared} task through discussion or role play. Quad differs in medium and
+mechanism: the agents act on a shared \emph{image} through a strict additive turn
+order rather than a conversation, and each is configured independently rather than
+assigned a functional role.
+
+\paragraph{Generative-agent personas.}
+Persona identities use the seed-memory schema of \citet{park2023generative}
+(\code{innate}, \code{learned}, \code{currently}, \code{lifestyle},
+\code{living\_area}), which pairs a character sketch with lightweight cognitive
+parameters. Quad uses the identity to colour \emph{what} an agent proposes; it
+does not run the full memory-stream/reflection machinery of that work (the
+companion two-agent system does).
+
+\paragraph{Human--AI co-creation.}
+The interaction design follows co-creative agents that draw or paint alongside a
+person \citep{davis2016empirically,oh2018lead,karimi2020creative}, and the
+motivation---making machine creative \emph{process} visible, not only its
+output---follows \citet{epstein2023art} and \citet{doshi2024generative}. Framing
+of machine creativity follows \citet{boden2004creative},
+\citet{colton2012computational} and \citet{ritchie2007some}.
+
+\paragraph{Retrieval.}
+\RAG{} is a deliberately minimal retriever \citep{lewis2020retrieval}: a keyword
+router over a small curated knowledge base, shaped so a true embedding store can
+replace it without changing callers.
+
+\paragraph{Instruction-guided image editing.}
+The additive canvas relies on editing that preserves prior content
+\citep{meng2022sdedit,hertz2023prompt,brooks2023instructpix2pix}, implemented via a
+hosted \code{images/edits} endpoint \citep{microsoft2025azure} rather than a local
+diffusion model \citep{rombach2022high}. Events stream to the browser over
+Server-Sent Events \citep{whatwg2024sse}.
+
+% =============================================================================
+\section{System Overview}
+\label{sec:overview}
+% =============================================================================
+A session has three phases. \textbf{(1) Configuration \& briefing:} the operator
+sets each of the four agents (name, voice, optional custom prompt, persona
+identity), a shared brief and style (typed or invented by the model), and the
+number of rounds $R\in[1,6]$. \textbf{(2) Sequential collaboration:} for each
+round, agents $1\to 2\to 3\to 4$ act in order; each reads the current canvas, adds
+one new object, and the object is composited onto the shared image. \textbf{(3)
+Critique:} \JUDGE{} scores the collaboration and the accumulated canvas is
+presented. Every event is streamed live; a \emph{Stop} control ends the turns
+early, after which \JUDGE{} evaluates the work so far.
+
+\begin{table}[t]
+\centering\small
+\fitwidth{\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Agent} & \textbf{Role} & \textbf{Edits canvas?}\\
+\midrule
+Agents 1--4 & configurable painters (in order) & yes\\
+\JUDGE{}    & critic / compositor              & \textbf{no}\\
+\bottomrule
+\end{tabular}}
+\caption{The five participants. The four painters act in strict sequence each
+round; \JUDGE{} only scores and presents.}
+\label{tab:roles}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}
+  \node[box=accent,minimum width=34mm] (ui) {\textbf{Browser UI}\\ 4-panel live view $\cdot$ filmstrip\\ click-to-expand turns $\cdot$ critic};
+  \node[box=accent,minimum width=50mm,right=30mm of ui] (be)
+      {\textbf{Single-file app} --- \file{canvasmind\_app.py} (FastAPI, one port)\\
+       \code{QuadSession} (strict sequence) $\cdot$ \RAG{}\\
+       per-session recorder $\cdot$ SSE stream};
+  \node[box=judge,minimum width=38mm,right=30mm of be] (az)
+      {\textbf{Azure OpenAI} (raw REST)\\ \code{gpt-5.2} --- agent turns, \JUDGE{}\\ \code{gpt-image-1} --- generate \& edit};
+  \draw[flow,transform canvas={yshift=2.5pt}] (ui) -- node[lbl,above]{\code{POST api/quad/start}} (be);
+  \draw[{Stealth[length=1.8mm]}-,transform canvas={yshift=-3.5pt},line width=0.7pt,draw=ink!70]
+        (ui) -- node[lbl,below]{SSE event stream} (be);
+  \draw[flow,transform canvas={yshift=2.5pt}] (be) -- node[lbl,above]{chat / images} (az);
+  \draw[{Stealth[length=1.8mm]}-,transform canvas={yshift=-3.5pt},line width=0.7pt,draw=ink!70]
+        (be) -- node[lbl,below]{JSON / base64 PNG} (az);
+\end{tikzpicture}}
+\caption{Architecture. One process serves the four-panel UI and the API on a
+single port; the browser receives live updates over SSE; all model calls are
+server-side over raw REST. A single origin removes CORS and reverse-proxy path
+rewriting behind a corporate VM proxy.}
+\label{fig:arch}
+\end{figure*}
+
+% =============================================================================
+\section{Configuring the Four Agents}
+\label{sec:agents}
+% =============================================================================
+Each agent is set along two orthogonal axes plus a name.
+
+\paragraph{Artistic voice (how it paints).}
+One of six painterly presets (Table~\ref{tab:voices}), or a free-text
+\emph{Configure Custom Agent} prompt that overrides the preset entirely. The voice
+sets palette, mark-making, and subject sensibility, and is echoed into the image
+prompt so the rendered addition matches it.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Preset voice} & \textbf{Signature}\\
+\midrule
+The Vanguard Minimalist    & negative space, geometry, restraint\\
+The Neo-Noir Cyberpunk     & high-contrast neon, rain, industry\\
+The Biomorphic Surrealist  & organic, fluid, uncanny melting form\\
+The Baroque Traditionalist & chiaroscuro, symmetry, ornate gold\\
+The Kinetic Futurist       & motion vectors, speed lines, energy\\
+The Luminous Impressionist & broken colour, dappled light, air\\
+\bottomrule
+\end{tabular}}
+\caption{The six artistic-voice presets. Any agent may instead take a free-text
+custom prompt that overrides its preset.}
+\label{tab:voices}
+\end{table}
+
+\paragraph{Persona identity (who it is).}
+One of eight seed-memory characters (Table~\ref{tab:personas}) after
+\citet{park2023generative}. The identity is layered onto the voice so the agent's
+life and trade are legible in the single element it adds---a marine biologist and
+a jazz club owner reach for different objects even in the same painterly voice.
+
+\begin{table*}[t]
+\centering
+\setlength{\tabcolsep}{5pt}
+\fitwidth{%
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Key} & \textbf{Name} & \textbf{Age / occupation} & \textbf{Innate temperament}\\
+\midrule
+\code{isabella\_rodriguez} & Isabella Rodriguez & 34, cafe owner & friendly, outgoing, hospitable\\
+\code{klaus\_mueller}      & Klaus Mueller      & 20, sociology researcher & analytical, curious, earnest\\
+\code{maya\_okonkwo}       & Maya Okonkwo       & 41, marine biologist & patient, observant, quietly fierce\\
+\code{tomas\_grieg}        & Tomas Grieg        & 67, retired shipwright and woodcarver & stoic, exacting, generous with time\\
+\code{priya\_raghunathan}  & Priya Raghunathan  & 29, software engineer and astronomer & systematic, imaginative, sleep-deprived\\
+\code{amara\_diallo}       & Amara Diallo       & 23, street muralist and organiser & bold, restless, unafraid\\
+\code{hiroshi\_tanaka}     & Hiroshi Tanaka     & 58, jazz saxophonist and club owner & improvisational, nocturnal, generous\\
+\code{elena\_voss}         & Elena Voss         & 36, emergency-room nurse & calm under pressure, decisive, compassionate\\
+\bottomrule
+\end{tabular}}
+\caption{The eight persona identities, in the seed-memory format of
+\citet{park2023generative}. The identity colours \emph{what} an agent proposes;
+the voice colours \emph{how} it paints. The two are set independently per agent.}
+\label{tab:personas}
+\end{table*}
+
+\paragraph{The turn contract.}
+On its turn an agent receives the shared brief, style, any \RAG{} keywords, and the
+recent collaboration transcript, and must reply in strict JSON: \code{sender},
+\code{sees\_on\_canvas} (what is already painted), \code{new\_object} (the single
+element it adds), \code{where}, \code{palette}, \code{reasoning}, and
+\code{confidence\_score}. Naming \code{sees\_on\_canvas} keeps the chain legible:
+each agent states what it is building on before it adds. Parsing is
+fence-tolerant with a fallback, so a single malformed reply never aborts a run.
+
+% =============================================================================
+\section{ArtHistoryRAG}
+\label{sec:rag}
+% =============================================================================
+\RAG{} is a lean, deterministic context router---no external vector store. It
+holds a curated $16$-entry knowledge base mapping a movement or technique
+(e.g.\ \emph{chiaroscuro}, \emph{cyberpunk}, \emph{ukiyo-e}, \emph{brutalism}) to a
+short phrase of precise stylistic vocabulary. On each turn it scans the brief,
+the agent's voice and keywords, and injects up to three matching phrases into the
+prompt, sharpening the rendered result toward the intended movement. Because its
+interface mirrors a retriever (\code{enrich(text, max\_hits)} / \code{retrieve}),
+it can be replaced by an embedding vector store \citep{lewis2020retrieval} without
+touching the agents.
+
+% =============================================================================
+\section{The Sequential Pipeline}
+\label{sec:pipeline}
+% =============================================================================
+The orchestrator (\code{QuadSession}) runs a strict nested loop: for each round
+$r=1\dots R$, for each agent index $0\dots 3$, the agent takes its turn and its
+one new object is composited onto the shared canvas (Figure~\ref{fig:quad}). The
+first turn of the session generates the opening element on a blank canvas; every
+later turn \emph{edits} the current canvas to add exactly one object while
+preserving all prior content. With $R$ rounds this yields $4R$ displayed step
+images (one generation followed by $4R-1$ additive edits), then \JUDGE{}.
+
+\begin{figure*}[t]
+\centering
+\fitwidth{%
+\begin{tikzpicture}[node distance=6mm]
+  \node[box=accent,minimum width=20mm] (brief) {\textbf{Brief}\\ (AI or user)\\ $+$ style};
+  \node[box=a1c,right=8mm of brief,minimum width=22mm] (a1) {\textbf{Agent 1}\\ voice $+$ persona\\ \emph{generate} $+1$ object};
+  \node[box=a2c,right=of a1,minimum width=22mm] (a2) {\textbf{Agent 2}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[box=judge,right=of a2,minimum width=22mm] (a3) {\textbf{Agent 3}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[box=accent,right=of a3,minimum width=22mm] (a4) {\textbf{Agent 4}\\ voice $+$ persona\\ \emph{edit} $+1$ object};
+  \node[draw=ink!40,dashed,rounded corners=3pt,right=of a4,minimum width=15mm,minimum height=8mm,font=\scriptsize,align=center] (dots) {next\\ round\\ $\times R$};
+  \node[box=judge,right=6mm of dots,minimum width=22mm] (judge) {\textbf{\JUDGE{}}\\ \emph{no edit}\\ scores $+$ presents};
+  \node[box=accent,below=7mm of a1,minimum width=26mm] (rag) {\RAG{}\\ \scriptsize 16-entry KB $\to$ up to 3\\ \scriptsize stylistic keywords};
+  \draw[flow] (brief) -- (a1); \draw[flow] (a1) -- (a2); \draw[flow] (a2) -- (a3);
+  \draw[flow] (a3) -- (a4); \draw[flow] (a4) -- (dots); \draw[flow] (dots) -- (judge);
+  \draw[flow,dashed,draw=ink!45] (rag.east) -| (a2.south);
+  \draw[flow,dashed,draw=ink!45] (rag.east) -| (a3.south);
+  \begin{scope}[on background layer]
+    \node[fit=(a1)(a4),draw=ink!25,rounded corners=4pt,inner sep=6pt,
+      label={[lbl,yshift=-1pt]above:one shared canvas, strict sequence $1\!\to\!2\!\to\!3\!\to\!4$ per round ($4R$ additive steps; \textbf{no} RL layer, \textbf{no} memory)}] {};
+  \end{scope}
+\end{tikzpicture}}
+\caption{The Quad-Agent sequential pipeline. Four independently configured agents
+each add one object in strict order per round; \RAG{} injects stylistic keywords
+when it recognises a movement; \JUDGE{} scores and presents. The first turn
+generates on a blank canvas; every later turn edits the shared canvas to add one
+element.}
+\label{fig:quad}
+\end{figure*}
+
+\paragraph{The additive image pipeline.}
+Two Azure image operations are used. \textbf{Generation} (\code{images/generations})
+creates the first object on a blank canvas. \textbf{Editing} (\code{images/edits})
+adds every later object: the current canvas is uploaded as multipart form-data with
+an emphatic instruction to keep all existing content exactly as it is and add only
+the one new element, rendered in the acting agent's image style. Both return base64
+PNG, inlined as \code{data:} URLs and written to disk. Every image step is wrapped
+in try/except: a failed edit emits a warning, keeps the previous canvas, and
+continues; with no image deployment at all, the four agents still hold the full
+textual chain.
+
+\paragraph{\JUDGE{}.}
+When the sequence finishes (or is stopped early), \JUDGE{} scores the
+\emph{sequential collaboration} on five axes---compositional coherence, style
+fidelity, emotional resonance, originality, and collaboration quality---plus a
+composite, with reasoning, highlights, and a one-sentence summary
+(Table~\ref{tab:judge}). It makes no edit; the final image is the accumulated
+canvas itself.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\fitwidth{\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\JUDGE{} axis} & \textbf{Assesses}\\
+\midrule
+compositional\_coherence & does the whole hold together\\
+style\_fidelity          & consistency with the brief/style\\
+emotional\_resonance     & affective strength\\
+originality              & inventiveness of the result\\
+collaboration\_quality   & how well the four built in turn\\
+\midrule
+composite                & model-produced overall score\\
+\bottomrule
+\end{tabular}}
+\caption{\JUDGE{}'s rubric for the four-agent chain. Scores are $0$--$10$; the UI
+rescales to $0$--$100$.}
+\label{tab:judge}
+\end{table}
+
+% =============================================================================
+\section{Per-Session Storage}
+\label{sec:storage}
+% =============================================================================
+Every session opens a numbered directory and records the run in full, so a
+session is a self-contained, auditable artefact. Under
+\file{data/sessions/session\_$\langle N\rangle$/} the app writes a
+\file{session.json} manifest (configuration, the four agents' voices and persona
+ids, deployments, timings, outcome); a \file{json/} tree with an ordered
+\file{events.jsonl}, an \file{llm\_calls.jsonl} logging every prompt, raw response
+and latency, a per-turn record (the chosen object, placement, palette, the agent's
+reasoning and its timestamp, and any \RAG{} keywords), the critic evaluation, and a
+summary; and an \file{images/} folder with every step PNG and the final canvas. A
+thread-local recorder lets the Azure wrappers log themselves, so capture requires
+no change at the call sites; recording is wrapped so a storage error can never
+abort a run. A pre-session participant form and a post-session experience survey
+are written into the same directory when a study is run (\S\ref{sec:human}).
+
+% =============================================================================
+\section{Implementation}
+\label{sec:impl}
+% =============================================================================
+The runtime is a single Python file, \file{canvasmind\_app.py}, serving the UI and
+the API on one port. The browser loads one page from the same origin and fetches
+relative \code{api/...} paths, so a reverse-proxy sub-path prefix is preserved---no
+CORS, no second port. Azure is called over raw REST with
+\code{max\_completion\_tokens} and no custom temperature, as the \code{gpt-5.2}
+deployment requires \citep{microsoft2025azure}. A background thread per session
+pushes events onto a queue that the SSE endpoint drains; thirteen event types are
+defined (\code{session}, \code{turn}, \code{agent}, \code{image\_pending},
+\code{image}, \code{critic}, \code{final}, \code{summary}, \code{warning},
+\code{error}, \code{done}, and---shared with the companion system---\code{metrics}
+and \code{reflection}, unused here). The four-panel UI streams each agent's feed,
+a labelled filmstrip, a click-to-expand full brief, and per-turn cards whose
+reasoning, palette and placement expand on click.
+
+\paragraph{Compute budget.}
+Each quad turn is two model calls: one chat completion for the agent's decision and
+one image call (generate or edit). At the end, \JUDGE{} is one more chat call. A
+session with $R$ rounds therefore costs $8R + 1$ model calls and produces $4R$
+step images. There is no reward model, probe, bandit, or credit computation to pay
+for---by design.
+
+% =============================================================================
+\section{Relation to the Two-Agent Companion}
+\label{sec:relation}
+% =============================================================================
+Quad shares the additive shared-canvas protocol, the \JUDGE{} critic, the
+single-file transport, the eight persona identities, and the storage format with
+the two-agent (\textsc{Aria}/\textsc{Nexus}) companion system. It differs in
+exactly one dimension: the companion wraps its two agents in an
+\emph{inference-time reinforcement-learning layer}---a reward model scoring five
+aesthetic dimensions, best-of-$N$ candidate selection, a per-agent bandit over
+artistic strategies, a memory stream with reflection, and Shapley/empowerment/%
+Goodhart diagnostics---whereas Quad has none of these (Table~\ref{tab:vs}). The
+companion is also more parallel (two agents alternating) where Quad is strictly
+sequential over four. This makes Quad a clean architectural control: the
+difference between the systems is precisely the RL layer plus the memory
+substrate. The companion system, and a formal audit and repair of its RL layer,
+are the subject of a separate paper.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}lcc@{}}
+\toprule
+ & \textbf{Quad (this paper)} & \textbf{Dual (companion)}\\
+\midrule
+Agents             & 4 & 2\\
+Order              & strict sequence & alternating\\
+Rounds $R$         & $[1,6]$ & $[1,8]$\\
+Images per session & $4R$ & $2R$\\
+Configurable voice & \textbf{yes} & no (fixed roles)\\
+\RAG{}             & \textbf{yes} & no\\
+Persona identity   & yes & yes\\
+Memory / reflection& no & yes\\
+Reward model / best-of-$N$ & no & yes\\
+Bandit / Shapley   & no & yes\\
+\JUDGE{}           & yes & yes\\
+Calls per session  & $8R+1$ & $12R+4$\\
+\bottomrule
+\end{tabular}}
+\caption{Quad versus the two-agent companion. Quad is the transparent,
+configurable substrate; the RL machinery lives only in the companion.}
+\label{tab:vs}
+\end{table}
+
+% =============================================================================
+\section{Toward a Human Study}
+\label{sec:human}
+% =============================================================================
+No human evaluation is reported. The instrumentation for one is implemented and
+specified here so a study would be pre-registered rather than reverse-engineered.
+Before the interface loads, a participant form collects age, gender, and self-rated
+art expertise. After a session, a survey of at least ten items---six on a $1$--$10$
+numeric scale (e.g.\ ``how coherent did the four agents' additions feel
+together?'') and six five-point Likert items \citep{likert1932technique} on
+ownership, surprise, perceived collaboration and trust, complemented by the
+Creativity Support Index \citep{cherry2014quantifying}---is recorded into the
+session directory. Final canvases can be rated blind by independent judges via the
+Consensual Assessment Technique \citep{amabile1982social}, yielding a human
+composite to compare against \JUDGE{}'s. A natural first study contrasts the
+configurable Quad pipeline against the RL-bearing companion on the same briefs.
+
+% =============================================================================
+\section{Conclusion}
+% =============================================================================
+CanvasMind\,--\,Quad turns image-making into a legible, configurable, four-way
+sequence on one shared canvas: each of four agents is set independently by voice
+and by persona, acts in a fixed order, and adds a single, readable element, while a
+critic scores the chain and presents the whole. By deliberately omitting the
+reinforcement-learning machinery of its two-agent companion, Quad stays a
+transparent substrate whose output is fully determined by how it is configured---
+and, for that same reason, a clean control against which the value of that
+machinery can later be measured. The system, its full-fidelity per-session storage,
+and a reproducible offline harness are released as code; a live-model and human
+evaluation is the natural next step.
+
+% =============================================================================
+\section*{Ethics Statement}
+% =============================================================================
+The system generates images with a hosted model and inherits its training-data
+provenance, biases and content-policy behaviour; we make no claim to originality of
+the underlying generative process. The eight persona identities are fictional
+composites, not real individuals, designed to span occupations and ages rather
+than to stereotype: a persona shapes the objects an agent proposes and nothing
+else. Because a persona conditions an artistic voice, deploying the system with
+personas keyed to protected attributes would risk essentialising them, and we do
+not do so. Any human study following \S\ref{sec:human} requires informed consent,
+the right to withdraw, and storage of survey responses separated from identifying
+information; the per-session records contain participant-authored prompts and must
+be treated as personal data.
+
+% References are embedded so they render with a plain pdflatex run (no bibtex).
+\input{references_quad.tex}
+
+\appendix
+
+\clearpage
+% =============================================================================
+\section{Configuration Constants}
+% =============================================================================
+\begin{table}[!ht]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Constant} & \textbf{Meaning} & \textbf{Value}\\
+\midrule
+--- & rounds $R$ (default 1) & $[1,6]$\\
+--- & painters per round & 4\\
+--- & artistic-voice presets & 6\\
+--- & persona identities & 8\\
+--- & \RAG{} knowledge-base size & 16\\
+--- & \RAG{} max keyword hits & 3\\
+--- & transcript window per turn & 8 lines\\
+--- & images per session & $4R$\\
+--- & model calls per session & $8R+1$\\
+--- & image size & $1024^2$\\
+--- & image-prompt truncation & 3900 ch.\\
+\bottomrule
+\end{tabular}}
+\caption{Quad configuration constants. Temperature is never sent; the deployment
+default is used.}
+\end{table}
+
+% =============================================================================
+\section{Event and API Contract}
+% =============================================================================
+\begin{table}[!ht]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\fitwidth{\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Endpoint} & \textbf{Purpose}\\
+\midrule
+\code{GET /api/quad/personas} & the six voices $+$ eight identities\\
+\code{POST /api/quad/start}   & start a quad session\\
+\code{GET /api/stream/\{id\}} & SSE event stream (shared)\\
+\code{POST /api/stop/\{id\}}  & halt turns; \JUDGE{} evaluates\\
+\code{GET /api/sessions}      & list recorded sessions\\
+\code{GET /api/sessions/\{n\}}& one session's manifest $+$ index\\
+\code{GET /assets/quad-hero}  & quad hero image\\
+\code{GET /}                  & the embedded single-page UI\\
+\bottomrule
+\end{tabular}}
+\caption{HTTP surface for the Quad pipeline (abridged). \code{POST /api/quad/start}
+takes the brief, style, rounds, and a four-element \code{agents} list of
+\code{\{name, persona (voice), custom\_prompt, persona\_id\}}.}
+\end{table}
+
+\noindent\textbf{SSE event types} (the Quad subset): \code{session}, \code{turn},
+\code{agent}, \code{image\_pending}, \code{image}, \code{critic}, \code{final},
+\code{summary}, \code{warning}, \code{error}, \code{done}. Each \code{agent} event
+carries the chosen object, placement, palette and the agent's reasoning; each
+\code{image} event carries the composited step as a \code{data:} URL and its
+on-disk filename.
+
+\end{document}

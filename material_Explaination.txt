@@ -1,9 +1,9 @@
 Everything is verified working through the launcher. Here's the result:
 
 
-1) HEALTH : {"status":"healthy","model":"gpt-5.2","images_enabled":true}   ✅ backend up
-2) UI     : HTTP 200, Start button present = True                          ✅ frontend served
-3) START  : session_id = 56132c88...                                       ✅ frontend→backend connected
+1) HEALTH : {"status":"healthy","model":"gpt-5.2","images_enabled":true}    backend up
+2) UI     : HTTP 200, Start button present = True                           frontend served
+3) START  : session_id = 56132c88...                                        frontend→backend connected
 Combined with the earlier full pipeline test (session → round → agent → … → done), the entire system is confirmed working: the launcher boots the app, the backend is healthy, the frontend UI is served, and the frontend successfully talks to the backend.
 
 Your single launcher script
